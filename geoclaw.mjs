@@ -2,13 +2,55 @@
 // Geoclaw v3.0 - Universal Agent Platform CLI
 // Entry point for global installation
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, copyFileSync, readFileSync } from 'fs';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// ── OS / Shell detection ────────────────────────────────────────────────────
+
+function detectShell() {
+  const platform = process.platform;
+
+  if (platform === 'darwin' || platform === 'linux') {
+    return { shell: 'bash', type: platform === 'darwin' ? 'macOS' : 'Linux' };
+  }
+
+  if (platform === 'win32') {
+    // 1. WSL (preferred on Windows)
+    try {
+      execSync('wsl bash --version', { stdio: 'ignore' });
+      return { shell: 'wsl', type: 'Windows/WSL', args: ['bash'] };
+    } catch {}
+
+    // 2. Git Bash (common Windows install)
+    const gitBashPaths = [
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+    ];
+    for (const p of gitBashPaths) {
+      if (existsSync(p)) {
+        return { shell: p, type: 'Windows/Git Bash' };
+      }
+    }
+
+    // 3. bash from PATH (Cygwin, MSYS2, etc.)
+    try {
+      execSync('bash --version', { stdio: 'ignore' });
+      return { shell: 'bash', type: 'Windows/Bash' };
+    } catch {}
+
+    return null; // no bash found
+  }
+
+  return { shell: 'bash', type: platform };
+}
+
+// ── Banner / Help ───────────────────────────────────────────────────────────
 
 function printBanner() {
   console.log(`
@@ -57,33 +99,134 @@ Learn more: https://github.com/nadavsimba24/geoclaw-universal
 `);
 }
 
+// ── Script runner (bash scripts) ────────────────────────────────────────────
+
 async function runScript(scriptName, args = []) {
   const scriptPath = join(__dirname, 'scripts', scriptName);
-  
+
   if (!existsSync(scriptPath)) {
     console.error(`❌ Script not found: ${scriptPath}`);
     process.exit(1);
   }
 
+  const sh = detectShell();
+
+  if (!sh) {
+    console.error(`
+❌ No compatible shell found on this system.
+
+Geoclaw scripts require bash. Please install one of:
+  • WSL (Windows Subsystem for Linux) — recommended for Windows
+      https://learn.microsoft.com/en-us/windows/wsl/install
+  • Git for Windows (includes Git Bash)
+      https://git-scm.com/download/win
+  • Cygwin or MSYS2
+`);
+    process.exit(1);
+  }
+
+  console.log(`ℹ️  Running on ${sh.type}`);
+
+  // Build spawn args depending on shell type
+  let cmd, cmdArgs;
+  if (sh.shell === 'wsl') {
+    cmd = 'wsl';
+    cmdArgs = ['bash', scriptPath, ...args];
+  } else {
+    cmd = sh.shell;
+    cmdArgs = [scriptPath, ...args];
+  }
+
   return new Promise((resolve, reject) => {
-    const child = spawn('bash', [scriptPath, ...args], {
+    const child = spawn(cmd, cmdArgs, {
       stdio: 'inherit',
-      env: { ...process.env, GEOCLAW_DIR: __dirname }
+      env: { ...process.env, GEOCLAW_DIR: __dirname },
     });
 
     child.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Script exited with code ${code}`));
-      }
+      if (code === 0) resolve();
+      else reject(new Error(`Script exited with code ${code}`));
     });
   });
 }
 
+// ── Update command (pure Node.js — works on all platforms) ──────────────────
+
+async function runUpdate() {
+  const PACKAGE = 'geoclaw-universal';
+
+  console.log('🔍 Checking current version...');
+  let currentVersion = 'unknown';
+  try {
+    const raw = execSync(`npm list -g --depth=0 --json`, { encoding: 'utf8' });
+    const parsed = JSON.parse(raw);
+    currentVersion = parsed?.dependencies?.[PACKAGE]?.version ?? 'unknown';
+  } catch {}
+  console.log(`   Installed : v${currentVersion}`);
+
+  console.log('🌐 Checking latest version on npm...');
+  let latestVersion;
+  try {
+    latestVersion = execSync(`npm view ${PACKAGE} version`, { encoding: 'utf8' }).trim();
+  } catch {
+    console.error('❌ Could not reach npm registry. Check your internet connection.');
+    process.exit(1);
+  }
+  console.log(`   Latest    : v${latestVersion}`);
+
+  if (currentVersion === latestVersion) {
+    console.log(`\n✅ Already up to date (v${latestVersion})`);
+    return;
+  }
+
+  // Backup .env
+  const envFile = join(__dirname, '.env');
+  let envBackup = null;
+  if (existsSync(envFile)) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    envBackup = `${envFile}.backup-${stamp}`;
+    copyFileSync(envFile, envBackup);
+    console.log(`\n💾 Config backed up → ${envBackup}`);
+  }
+
+  // Run the update
+  console.log(`\n📦 Updating ${PACKAGE} v${currentVersion} → v${latestVersion}...`);
+  try {
+    execSync(`npm install -g ${PACKAGE}@${latestVersion}`, { stdio: 'inherit' });
+  } catch {
+    console.error('\n❌ npm install failed.');
+    if (envBackup) console.log(`   Your config backup is safe at: ${envBackup}`);
+    process.exit(1);
+  }
+
+  // Restore .env into newly installed location
+  if (envBackup) {
+    try {
+      const newInstallDir = execSync(`npm root -g`, { encoding: 'utf8' }).trim();
+      const newEnvPath = join(newInstallDir, PACKAGE, '.env');
+      if (existsSync(dirname(newEnvPath))) {
+        copyFileSync(envBackup, newEnvPath);
+        console.log('✅ Configuration restored');
+      }
+    } catch {
+      console.log(`⚠️  Could not auto-restore config. Copy manually from:\n   ${envBackup}`);
+    }
+  }
+
+  console.log(`
+────────────────────────────────────────────
+✅ Geoclaw updated to v${latestVersion}
+
+   geoclaw start   → launch the platform
+   geoclaw status  → verify all components
+`);
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
+
 async function main() {
   const args = process.argv.slice(2);
-  
+
   if (args.length === 0) {
     printBanner();
     printHelp();
@@ -101,6 +244,11 @@ async function main() {
     case 'setup':
       printBanner();
       await runScript('setup-wizard-simple.sh');
+      break;
+
+    case 'update':
+      printBanner();
+      await runUpdate();
       break;
 
     case 'learn':
@@ -132,11 +280,6 @@ async function main() {
         break;
       }
       await runScript('components/mcporter-integration.js', args.slice(1));
-      break;
-
-    case 'update':
-      printBanner();
-      await runScript('update.sh');
       break;
 
     case 'init':
