@@ -371,5 +371,88 @@ learn_component() {
       echo "  • OAuth automation: Handles browser-based authentication automatically"
       echo "  • Educational exploration: Discover what tools are available"
       echo ""
-      echo "**How it works:**"
-      echo "  1. MCPorter scans your system for MCP server
+      echo "  1. MCPorter scans your system for MCP server configurations"
+      echo "  2. Discovers servers from editors (Cursor, Claude, VS Code)"
+      echo "  3. Exposes tools through a unified CLI interface"
+      echo "  4. Geoclaw integrates with MCPorter to call tools transparently"
+      echo ""
+      echo "**Commands:**"
+      echo "  • geoclaw mcp list        - List discovered MCP servers"
+      echo "  • geoclaw mcp explore <server> - Explore server tools"
+      echo "  • geoclaw mcp call <server.tool> - Call MCP tool"
+      ;;
+    
+    *)
+      echo "Topic '$1' not found."
+      echo ""
+      echo "Available topics:"
+      echo "  mcporter, n8n, qgis, web-scraping, vibe-kanban"
+      echo "  monday, salesforce, memory, skills, mcp, onecli"
+      ;;
+  esac
+}
+
+show_status() {
+  print_header
+  echo "Geoclaw v3.0 - Component Status"
+  echo ""
+
+  ENV_FILE="$PROJECT_DIR/.env"
+  if [[ -f "$ENV_FILE" ]]; then
+    source "$ENV_FILE"
+    echo "Configuration loaded from: $ENV_FILE"
+    echo ""
+    _status() {
+      local var="$1"; local label="$2"
+      if [[ "${!var:-false}" == "true" ]]; then
+        echo "  ✅  $label"
+      else
+        echo "  ⚪  $label (disabled)"
+      fi
+    }
+    _status GEOCLAW_MEMORY_ENABLED        "Memory (Central Intelligence)"
+    _status GEOCLAW_SKILLS_GITHUB_ENABLED "Skills (GitHub CLI)"
+    _status GEOCLAW_VIBE_KANBAN_ENABLED   "Vibe Kanban (Task Management)"
+    _status GEOCLAW_N8N_ENABLED           "n8n Workflow Automation"
+    _status GEOCLAW_GEOSPATIAL_ENABLED    "QGIS/PostGIS Geospatial"
+    _status GEOCLAW_WEB_SCRAPING_ENABLED  "Web Scraping"
+    _status GEOCLAW_MCPORTER_ENABLED      "MCPorter (MCP Discovery)"
+    _status GEOCLAW_WORKFLOW_ENABLED      "Workflow Orchestration"
+    _status GEOCLAW_TELEGRAM_ENABLED      "Telegram"
+    _status GEOCLAW_SLACK_ENABLED         "Slack"
+    _status GEOCLAW_WHATSAPP_ENABLED      "WhatsApp"
+    _status GEOCLAW_SIGNAL_ENABLED        "Signal"
+    _status GEOCLAW_MONDAY_ENABLED        "Monday.com"
+    _status GEOCLAW_SALESFORCE_ENABLED    "Salesforce"
+    _status GEOCLAW_MCP_SERVER_ENABLED    "MCP Server"
+    echo ""
+    echo "Run 'geoclaw setup' to enable or configure components."
+  else
+    echo "  ⚠️  .env not found — run: geoclaw setup"
+  fi
+}
+
+main() {
+  local action="${1:-}"
+  local topic="${2:-}"
+
+  case "$action" in
+    learn)
+      if [[ -z "$topic" ]]; then
+        echo "Usage: geoclaw learn <topic>"
+        echo "Topics: mcporter, n8n, qgis, web-scraping, vibe-kanban, monday, salesforce, memory, skills"
+        exit 1
+      fi
+      learn_component "$topic"
+      ;;
+    status|"")
+      show_status
+      ;;
+    *)
+      echo "Usage: $0 [learn <topic>|status]"
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

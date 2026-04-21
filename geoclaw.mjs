@@ -67,6 +67,7 @@ Usage: geoclaw <command> [options]
 Commands:
   start           Start Geoclaw agent platform
   setup           Interactive setup wizard
+  doctor          Check system requirements & diagnose issues
   update          Update to the latest version
   learn <topic>   Learn about a component
   status          Show platform status
@@ -165,6 +166,91 @@ Geoclaw scripts require bash. Please install one of:
   });
 }
 
+// ── Doctor command ──────────────────────────────────────────────────────────
+
+async function runDoctor() {
+  const { readFileSync } = await import('fs');
+  const { join: pjoin } = await import('path');
+
+  console.log('\n🩺  Geoclaw Doctor — System Check\n');
+
+  const checks = [];
+
+  // Node.js version
+  const nodeVer = process.versions.node;
+  const nodeMajor = parseInt(nodeVer.split('.')[0], 10);
+  checks.push({
+    label: `Node.js v${nodeVer}`,
+    ok: nodeMajor >= 20,
+    fix: 'Install Node.js v20+: https://nodejs.org/',
+  });
+
+  // npm
+  try {
+    const npmVer = execSync('npm --version', { encoding: 'utf8', timeout: 5000 }).trim();
+    checks.push({ label: `npm v${npmVer}`, ok: true });
+  } catch {
+    checks.push({ label: 'npm', ok: false, fix: 'Install Node.js (includes npm): https://nodejs.org/' });
+  }
+
+  // bash
+  const sh = detectShell();
+  checks.push({
+    label: `Shell: ${sh ? sh.type : 'none'}`,
+    ok: !!sh,
+    fix: 'Install bash / WSL: https://learn.microsoft.com/en-us/windows/wsl/install',
+  });
+
+  // .env file
+  const envPath = join(__dirname, '.env');
+  const envTemplatePath = join(__dirname, '.env.template');
+  const hasEnv = existsSync(envPath);
+  const hasTemplate = existsSync(envTemplatePath);
+  checks.push({
+    label: `.env file${hasEnv ? '' : ' (missing — run: geoclaw setup)'}`,
+    ok: hasEnv,
+    fix: hasTemplate
+      ? 'Run: geoclaw setup   OR   cp .env.template .env'
+      : 'Run: geoclaw setup',
+  });
+
+  // geoclaw.config.yml (optional)
+  const hasConfig = existsSync(join(__dirname, 'geoclaw.config.yml'));
+  checks.push({ label: `geoclaw.config.yml${hasConfig ? '' : ' (optional, not required)'}`, ok: true });
+
+  // scripts directory
+  const hasScripts = existsSync(join(__dirname, 'scripts'));
+  checks.push({ label: 'scripts/ directory', ok: hasScripts, fix: 'Reinstall geoclaw' });
+
+  // Optional tools
+  console.log('Core requirements:');
+  let allOk = true;
+  for (const c of checks.slice(0, 4)) {
+    const icon = c.ok ? '  ✅' : '  ❌';
+    console.log(`${icon}  ${c.label}`);
+    if (!c.ok) { console.log(`       → ${c.fix}`); allOk = false; }
+  }
+
+  console.log('\nOptional integrations:');
+  const optionals = [
+    { cmd: 'docker', label: 'Docker (for container mode)' },
+    { cmd: 'psql', label: 'PostgreSQL/PostGIS (for geospatial)' },
+    { cmd: 'signal-cli', label: 'signal-cli (for Signal messaging)' },
+  ];
+  for (const o of optionals) {
+    try { execSync(`${o.cmd} --version`, { stdio: 'ignore', timeout: 3000 }); console.log(`  ✅  ${o.label}`); }
+    catch { console.log(`  ⚪  ${o.label} — not installed (optional)`); }
+  }
+
+  console.log('');
+  if (allOk) {
+    console.log('✅  All core checks passed. Run: geoclaw setup');
+  } else {
+    console.log('❌  Some checks failed. Fix the issues above, then run: geoclaw setup');
+  }
+  console.log('');
+}
+
 // ── Update command (pure Node.js — works on all platforms) ──────────────────
 
 async function runUpdate() {
@@ -173,7 +259,7 @@ async function runUpdate() {
   console.log('🔍 Checking current version...');
   let currentVersion = 'unknown';
   try {
-    const raw = execSync(`npm list -g --depth=0 --json`, { encoding: 'utf8' });
+    const raw = execSync(`npm list -g --depth=0 --json`, { encoding: 'utf8', timeout: 15000 });
     const parsed = JSON.parse(raw);
     currentVersion = parsed?.dependencies?.[PACKAGE]?.version ?? 'unknown';
   } catch {}
@@ -182,7 +268,7 @@ async function runUpdate() {
   console.log('🌐 Checking latest version on npm...');
   let latestVersion;
   try {
-    latestVersion = execSync(`npm view ${PACKAGE} version`, { encoding: 'utf8' }).trim();
+    latestVersion = execSync(`npm view ${PACKAGE} version`, { encoding: 'utf8', timeout: 15000 }).trim();
   } catch {
     console.error('❌ Could not reach npm registry. Check your internet connection.');
     process.exit(1);
@@ -207,7 +293,7 @@ async function runUpdate() {
   // Run the update
   console.log(`\n📦 Updating ${PACKAGE} v${currentVersion} → v${latestVersion}...`);
   try {
-    execSync(`npm install -g ${PACKAGE}@${latestVersion}`, { stdio: 'inherit' });
+    execSync(`npm install -g ${PACKAGE}@${latestVersion}`, { stdio: 'inherit', timeout: 120000 });
   } catch {
     console.error('\n❌ npm install failed.');
     if (envBackup) console.log(`   Your config backup is safe at: ${envBackup}`);
@@ -297,6 +383,10 @@ async function main() {
       await runScript('components/mcporter-integration.js', args.slice(1));
       break;
 
+    case 'doctor':
+      await runDoctor();
+      break;
+
     case 'init':
       await runScript('geoclaw_init_universal.sh', args.slice(1));
       break;
@@ -317,5 +407,7 @@ async function main() {
 
 main().catch((error) => {
   console.error('❌ Error:', error.message);
+  if (process.env.DEBUG) console.error(error.stack);
+  else console.error('   (set DEBUG=1 for full stack trace)');
   process.exit(1);
 });

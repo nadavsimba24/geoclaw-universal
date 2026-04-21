@@ -101,7 +101,7 @@ update_env_var() {
   
   if grep -q "^$var_name=" "$ENV_FILE"; then
     # Update existing
-    sed -i.bak "s|^$var_name=.*|$var_name=$var_value|" "$ENV_FILE"
+    _sedi "s|^$var_name=.*|$var_name=$var_value|" "$ENV_FILE"
   else
     # Add new
     echo "$var_name=$var_value" >> "$ENV_FILE"
@@ -113,7 +113,6 @@ update_env_var "GEOCLAW_SLACK_BOT_TOKEN" "$SLACK_BOT_TOKEN"
 update_env_var "GEOCLAW_SLACK_APP_TOKEN" "$SLACK_APP_TOKEN"
 
 # Clean up backup file
-rm -f "$ENV_FILE.bak"
 
 echo ""
 echo "Configuration updated!"

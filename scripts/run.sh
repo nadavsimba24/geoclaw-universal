@@ -43,28 +43,19 @@ print_header() {
   echo -e "${NC}"
 }
 
-# Load environment
-if [[ -f "$PROJECT_DIR/.env" ]]; then
-  source "$PROJECT_DIR/.env"
-else
-  echo "Error: .env file not found at $PROJECT_DIR/.env"
-  echo ""
-  echo "Please copy .env.template to .env and configure your components:"
-  echo "  cp .env.template .env"
-  echo ""
-  echo "The .env file configures these integrated components:"
-  print_component "Central Intelligence" "Persistent memory system"
-  print_component "GitHub CLI Skills" "Skill marketplace"
-  print_component "Skills CLI" "Cross-tool skill sync"
-  print_component "Vibe Kanban" "Visual task management"
-  print_component "Monday.com" "Project management"
-  print_component "Salesforce" "CRM automation"
-  print_component "Messaging" "Slack/Telegram/WhatsApp/Signal"
-  print_component "OneCLI Vault" "Credential security"
-  echo ""
-  echo "After configuring, run: ./scripts/run.sh"
-  exit 1
+# Load environment — auto-create from template if missing
+if [[ ! -f "$PROJECT_DIR/.env" ]]; then
+  if [[ -f "$PROJECT_DIR/.env.template" ]]; then
+    print_warning ".env not found — creating from template (all features disabled by default)"
+    cp "$PROJECT_DIR/.env.template" "$PROJECT_DIR/.env"
+    print_success ".env created. Run 'geoclaw setup' to enable features."
+    echo ""
+  else
+    print_error ".env and .env.template both missing. Reinstall geoclaw."
+    exit 1
+  fi
 fi
+source "$PROJECT_DIR/.env"
 
 print_header
 

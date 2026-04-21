@@ -439,10 +439,79 @@ learn_component() {
   echo "Type: @geoclaw setup to configure this component"
 }
 
+
 show_status() {
   print_header
   echo "Geoclaw v3.0 Component Status"
   echo ""
-  
-  # Load environment if exists
-  if
+
+  local env_file="$PROJECT_DIR/.env"
+  if [[ ! -f "$env_file" ]]; then
+    echo "  ⚠  .env file not found. Run: geoclaw setup"
+    return
+  fi
+
+  # shellcheck disable=SC1090
+  source "$env_file"
+
+  check_flag() {
+    local var="$1"
+    local label="$2"
+    if [[ "${!var:-false}" == "true" ]]; then
+      echo -e "  ${GREEN}✓  $label${NC} — enabled"
+    else
+      echo -e "  ⚪  $label — disabled"
+    fi
+  }
+
+  check_flag GEOCLAW_MEMORY_ENABLED       "Central Intelligence (memory)"
+  check_flag GEOCLAW_SKILLS_GITHUB_ENABLED "GitHub CLI Skills"
+  check_flag GEOCLAW_SKILLS_SYNC_ENABLED   "Skills CLI sync"
+  check_flag GEOCLAW_VIBE_KANBAN_ENABLED   "Vibe Kanban"
+  check_flag GEOCLAW_MONDAY_ENABLED        "Monday.com"
+  check_flag GEOCLAW_SALESFORCE_ENABLED    "Salesforce"
+  check_flag GEOCLAW_SLACK_ENABLED         "Slack"
+  check_flag GEOCLAW_TELEGRAM_ENABLED      "Telegram"
+  check_flag GEOCLAW_WHATSAPP_ENABLED      "WhatsApp"
+  check_flag GEOCLAW_SIGNAL_ENABLED        "Signal"
+  check_flag GEOCLAW_ONECLI_ENABLED        "OneCLI Vault"
+  check_flag GEOCLAW_MCP_SERVER_ENABLED    "MCP Server"
+  check_flag GEOCLAW_N8N_ENABLED           "n8n workflows"
+  check_flag GEOCLAW_GEOSPATIAL_ENABLED    "Geospatial (QGIS/PostGIS)"
+  check_flag GEOCLAW_WEB_SCRAPING_ENABLED  "Web scraping"
+  check_flag GEOCLAW_WORKFLOW_ENABLED      "Workflow orchestration"
+
+  echo ""
+  echo "Runtime mode: ${GEOCLAW_RUNTIME_MODE:-cli}"
+  echo ""
+  echo "Run 'geoclaw setup' to enable or configure components."
+}
+
+main() {
+  local command="${1:-help}"
+  local arg="${2:-}"
+
+  case "$command" in
+    learn)
+      if [[ -z "$arg" ]]; then
+        echo "Usage: geoclaw learn <component>"
+        echo "Available: central-intelligence, skills, vibe-kanban, monday, salesforce,"
+        echo "           mcp, mcporter, onecli, n8n, qgis, web-scraping, memory"
+        exit 1
+      fi
+      learn_component "$arg"
+      ;;
+    status)
+      show_status
+      ;;
+    capabilities|list)
+      show_capabilities
+      ;;
+    *)
+      echo "Usage: $0 <learn|status|capabilities> [component]"
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

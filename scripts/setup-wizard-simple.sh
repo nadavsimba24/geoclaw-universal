@@ -14,6 +14,15 @@ BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 NC='\033[0m'
 
+# Cross-platform in-place sed (macOS requires empty string arg, Linux does not)
+_sedi() {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
 print_header() {
   echo -e "${PURPLE}"
   echo "╔══════════════════════════════════════════════════════════════╗"
@@ -61,7 +70,7 @@ set_env() {
   local value="$2"
   
   if grep -q "^$var=" "$ENV_FILE"; then
-    sed -i "s|^$var=.*|$var=$value|" "$ENV_FILE"
+    _sedi "s|^$var=.*|$var=$value|" "$ENV_FILE"
   else
     echo "$var=$value" >> "$ENV_FILE"
   fi

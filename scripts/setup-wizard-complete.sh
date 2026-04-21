@@ -17,6 +17,15 @@ CYAN='\033[0;36m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Cross-platform in-place sed (macOS requires empty string arg, Linux does not)
+_sedi() {
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
 print_header() {
   echo -e "${PURPLE}"
   echo "╔══════════════════════════════════════════════════════════════╗"
@@ -75,7 +84,7 @@ ask_input() {
   
   # Update environment variable
   if [[ -n "$var_name" ]]; then
-    sed -i "/^$var_name=/d" "$ENV_FILE" 2>/dev/null || true
+    _sedi "/^$var_name=/d" "$ENV_FILE" 2>/dev/null || true
     echo "$var_name=\"$input\"" >> "$ENV_FILE"
   fi
   
@@ -108,7 +117,7 @@ setup_environment() {
   
   # Set project name
   PROJECT_NAME=$(basename "$PROJECT_DIR")
-  sed -i "s/GEOCLAW_PROJECT_NAME=.*/GEOCLAW_PROJECT_NAME=\"$PROJECT_NAME\"/" "$ENV_FILE"
+  _sedi "s/GEOCLAW_PROJECT_NAME=.*/GEOCLAW_PROJECT_NAME=\"$PROJECT_NAME\"/" "$ENV_FILE"
   
   print_success "Environment setup complete"
 }
@@ -132,13 +141,13 @@ setup_memory_system() {
     fi
     
     # Enable in .env
-    sed -i "s/GEOCLAW_MEMORY_ENABLED=.*/GEOCLAW_MEMORY_ENABLED=true/" "$ENV_FILE"
-    sed -i "s/GEOCLAW_MEMORY_PROVIDER=.*/GEOCLAW_MEMORY_PROVIDER=central-intelligence/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_MEMORY_ENABLED=.*/GEOCLAW_MEMORY_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_MEMORY_PROVIDER=.*/GEOCLAW_MEMORY_PROVIDER=central-intelligence/" "$ENV_FILE"
     
     print_success "Memory system enabled"
     print_info "Commands: @geoclaw remember, @geoclaw recall, @geoclaw memory search"
   else
-    sed -i "s/GEOCLAW_MEMORY_ENABLED=.*/GEOCLAW_MEMORY_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_MEMORY_ENABLED=.*/GEOCLAW_MEMORY_ENABLED=false/" "$ENV_FILE"
     print_info "Memory system disabled"
   fi
 }
@@ -175,14 +184,14 @@ setup_skill_ecosystem() {
     fi
     
     # Enable in .env
-    sed -i "s/GEOCLAW_SKILLS_GITHUB_ENABLED=.*/GEOCLAW_SKILLS_GITHUB_ENABLED=true/" "$ENV_FILE"
-    sed -i "s/GEOCLAW_SKILLS_SYNC_ENABLED=.*/GEOCLAW_SKILLS_SYNC_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_SKILLS_GITHUB_ENABLED=.*/GEOCLAW_SKILLS_GITHUB_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_SKILLS_SYNC_ENABLED=.*/GEOCLAW_SKILLS_SYNC_ENABLED=true/" "$ENV_FILE"
     
     print_success "Skill ecosystem enabled"
     print_info "Commands: @geoclaw skills list, @geoclaw skills install, @geoclaw skills sync"
   else
-    sed -i "s/GEOCLAW_SKILLS_GITHUB_ENABLED=.*/GEOCLAW_SKILLS_GITHUB_ENABLED=false/" "$ENV_FILE"
-    sed -i "s/GEOCLAW_SKILLS_SYNC_ENABLED=.*/GEOCLAW_SKILLS_SYNC_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_SKILLS_GITHUB_ENABLED=.*/GEOCLAW_SKILLS_GITHUB_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_SKILLS_SYNC_ENABLED=.*/GEOCLAW_SKILLS_SYNC_ENABLED=false/" "$ENV_FILE"
     print_info "Skill ecosystem disabled"
   fi
 }
@@ -208,7 +217,7 @@ setup_vibe_kanban() {
     fi
     
     # Enable in .env
-    sed -i "s/GEOCLAW_VIBE_KANBAN_ENABLED=.*/GEOCLAW_VIBE_KANBAN_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_VIBE_KANBAN_ENABLED=.*/GEOCLAW_VIBE_KANBAN_ENABLED=true/" "$ENV_FILE"
     
     # Set ports
     VIBE_KANBAN_UI_PORT=$(ask_input "Vibe Kanban UI port" "3003" "GEOCLAW_VIBE_KANBAN_UI_PORT")
@@ -218,7 +227,7 @@ setup_vibe_kanban() {
     print_info "Commands: @geoclaw create task, @geoclaw show board, @geoclaw start workspace"
     print_info "Web UI: http://localhost:$VIBE_KANBAN_UI_PORT"
   else
-    sed -i "s/GEOCLAW_VIBE_KANBAN_ENABLED=.*/GEOCLAW_VIBE_KANBAN_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_VIBE_KANBAN_ENABLED=.*/GEOCLAW_VIBE_KANBAN_ENABLED=false/" "$ENV_FILE"
     print_info "Vibe Kanban disabled"
   fi
 }
@@ -241,7 +250,7 @@ setup_n8n_integration() {
     fi
     
     # Enable in .env
-    sed -i "s/GEOCLAW_N8N_ENABLED=.*/GEOCLAW_N8N_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_N8N_ENABLED=.*/GEOCLAW_N8N_ENABLED=true/" "$ENV_FILE"
     
     # Set URL
     N8N_URL=$(ask_input "n8n URL (leave empty for default)" "http://localhost:5678" "GEOCLAW_N8N_URL")
@@ -255,7 +264,7 @@ setup_n8n_integration() {
     print_info "Commands: @geoclaw n8n execute, @geoclaw n8n create workflow"
     print_info "Web UI: $N8N_URL"
   else
-    sed -i "s/GEOCLAW_N8N_ENABLED=.*/GEOCLAW_N8N_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_N8N_ENABLED=.*/GEOCLAW_N8N_ENABLED=false/" "$ENV_FILE"
     print_info "n8n integration disabled"
   fi
 }
@@ -285,8 +294,8 @@ setup_geospatial() {
     fi
     
     # Enable in .env
-    sed -i "s/GEOCLAW_GEOSPATIAL_ENABLED=.*/GEOCLAW_GEOSPATIAL_ENABLED=true/" "$ENV_FILE"
-    sed -i "s/GEOCLAW_QGIS_ENABLED=.*/GEOCLAW_QGIS_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_GEOSPATIAL_ENABLED=.*/GEOCLAW_GEOSPATIAL_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_QGIS_ENABLED=.*/GEOCLAW_QGIS_ENABLED=true/" "$ENV_FILE"
     
     # PostgreSQL configuration
     print_info "PostgreSQL configuration:"
@@ -299,17 +308,17 @@ setup_geospatial() {
     # QGIS configuration - detect path per OS
     if [[ -d "/Applications/QGIS.app" ]]; then
       QGIS_PATH="/Applications/QGIS.app/Contents/MacOS/QGIS"
-      sed -i "s|GEOCLAW_QGIS_PATH=.*|GEOCLAW_QGIS_PATH=\"$QGIS_PATH\"|" "$ENV_FILE"
+      _sedi "s|GEOCLAW_QGIS_PATH=.*|GEOCLAW_QGIS_PATH=\"$QGIS_PATH\"|" "$ENV_FILE"
     elif command -v qgis &>/dev/null; then
       QGIS_PATH="$(command -v qgis)"
-      sed -i "s|GEOCLAW_QGIS_PATH=.*|GEOCLAW_QGIS_PATH=\"$QGIS_PATH\"|" "$ENV_FILE"
+      _sedi "s|GEOCLAW_QGIS_PATH=.*|GEOCLAW_QGIS_PATH=\"$QGIS_PATH\"|" "$ENV_FILE"
     fi
     
     print_success "Geospatial integration enabled"
     print_info "Commands: @geoclaw spatial query, @geoclaw create map, @geoclaw analyze locations"
   else
-    sed -i "s/GEOCLAW_GEOSPATIAL_ENABLED=.*/GEOCLAW_GEOSPATIAL_ENABLED=false/" "$ENV_FILE"
-    sed -i "s/GEOCLAW_QGIS_ENABLED=.*/GEOCLAW_QGIS_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_GEOSPATIAL_ENABLED=.*/GEOCLAW_GEOSPATIAL_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_QGIS_ENABLED=.*/GEOCLAW_QGIS_ENABLED=false/" "$ENV_FILE"
     print_info "Geospatial integration disabled"
   fi
 }
@@ -335,27 +344,27 @@ setup_web_scraping() {
     print_info "Checking browser automation dependencies..."
     
     # Enable in .env
-    sed -i "s/GEOCLAW_WEB_SCRAPING_ENABLED=.*/GEOCLAW_WEB_SCRAPING_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_WEB_SCRAPING_ENABLED=.*/GEOCLAW_WEB_SCRAPING_ENABLED=true/" "$ENV_FILE"
     
     # Configuration
     print_info "Web scraping configuration:"
     HEADLESS_MODE=$(ask_input "Run browser in headless mode? (yes/no)" "yes")
     if [[ "$HEADLESS_MODE" == "yes" ]]; then
-      sed -i "s/GEOCLAW_PUPPETEER_HEADLESS=.*/GEOCLAW_PUPPETEER_HEADLESS=true/" "$ENV_FILE"
+      _sedi "s/GEOCLAW_PUPPETEER_HEADLESS=.*/GEOCLAW_PUPPETEER_HEADLESS=true/" "$ENV_FILE"
     else
-      sed -i "s/GEOCLAW_PUPPETEER_HEADLESS=.*/GEOCLAW_PUPPETEER_HEADLESS=false/" "$ENV_FILE"
+      _sedi "s/GEOCLAW_PUPPETEER_HEADLESS=.*/GEOCLAW_PUPPETEER_HEADLESS=false/" "$ENV_FILE"
     fi
     
     # Rate limiting
     if ask_yes_no "Enable rate limiting for polite scraping?"; then
-      sed -i "s/GEOCLAW_RATE_LIMIT_ENABLED=.*/GEOCLAW_RATE_LIMIT_ENABLED=true/" "$ENV_FILE"
+      _sedi "s/GEOCLAW_RATE_LIMIT_ENABLED=.*/GEOCLAW_RATE_LIMIT_ENABLED=true/" "$ENV_FILE"
       REQUESTS_PER_SECOND=$(ask_input "Requests per second" "2" "GEOCLAW_REQUESTS_PER_SECOND")
     fi
     
     print_success "Web scraping enabled"
     print_info "Commands: @geoclaw scrape, @geoclaw navigate, @geoclaw extract data"
   else
-    sed -i "s/GEOCLAW_WEB_SCRAPING_ENABLED=.*/GEOCLAW_WEB_SCRAPING_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_WEB_SCRAPING_ENABLED=.*/GEOCLAW_WEB_SCRAPING_ENABLED=false/" "$ENV_FILE"
     print_info "Web scraping disabled"
   fi
 }
@@ -371,13 +380,13 @@ setup_workflow_orchestration() {
     print_info "Configuring workflow orchestrator..."
     
     # Enable in .env
-    sed -i "s/GEOCLAW_WORKFLOW_ENABLED=.*/GEOCLAW_WORKFLOW_ENABLED=true/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_WORKFLOW_ENABLED=.*/GEOCLAW_WORKFLOW_ENABLED=true/" "$ENV_FILE"
     
     print_success "Workflow orchestration enabled"
     print_info "Commands: @geoclaw workflow execute, @geoclaw workflow create"
     print_info "Pre-built workflows: Data pipelines, monitoring systems, business intelligence"
   else
-    sed -i "s/GEOCLAW_WORKFLOW_ENABLED=.*/GEOCLAW_WORKFLOW_ENABLED=false/" "$ENV_FILE"
+    _sedi "s/GEOCLAW_WORKFLOW_ENABLED=.*/GEOCLAW_WORKFLOW_ENABLED=false/" "$ENV_FILE"
     print_info "Workflow orchestration disabled"
   fi
 }

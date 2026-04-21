@@ -434,39 +434,26 @@ print_section "4. Creating Scripts Directory"
 mkdir -p "$PROJECT_DIR/scripts"
 
 # Create enhanced run.sh with component explanations
-cat >"$PROJECT_DIR/scripts/run.sh" <<'RUN'
-#!/usr/bin/env bash
-# Geoclaw v3.0 Universal Platform Runner
-# Clearly shows which components are being used
-set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-NC='\033[0m'
-
-print_component() {
-  echo -e "${YELLOW}🛠  $1${NC} - $2"
-}
-
-print_status() {
-  echo -e "${BLUE}▸ $1${NC}"
-}
-
-print_success() {
-  echo -e "${GREEN}✓ $1${NC}"
-}
-
-# Load environment
-if [[ -f "$PROJECT_DIR/.env" ]]; then
-  source "$PROJECT_DIR/.env"
+# Copy scripts from installed geoclaw package
+if [[ -n "${GEOCLAW_DIR:-}" ]] && [[ -d "$GEOCLAW_DIR/scripts" ]]; then
+  cp -r "$GEOCLAW_DIR/scripts/." "$PROJECT_DIR/scripts/"
+  print_success "Copied scripts from geoclaw package"
 else
-  echo "Error: .env file not found at $PROJECT_DIR/.env"
-  echo "Copy .env.template to .env and fill in your configuration"
-  echo ""
-  echo "The .env file contains configuration for all integrated components:"
+  print_warning "GEOCLAW_DIR not set — scripts not copied."
+  print_info "This is normal when running from source. Run 'geoclaw start' to initialize."
+fi
+
+print_section "5. Final Steps"
+
+echo ""
+print_success "Geoclaw v${GEOCLAW_VERSION} project initialized at: $PROJECT_DIR"
+echo ""
+echo "Next steps:"
+echo "  1. cd $PROJECT_DIR"
+echo "  2. geoclaw setup     # Configure components"
+echo "  3. geoclaw doctor    # Verify installation"
+echo "  4. geoclaw start     # Launch the platform"
+echo ""
+print_info "Learn about components: geoclaw learn <component>"
+print_info "Check status: geoclaw status"

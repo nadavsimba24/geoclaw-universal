@@ -35,7 +35,7 @@
     "yaml": "^2.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "repository": {
     "type": "git",
@@ -52,6 +52,7 @@
     "package.json",
     "README.md",
     "SKILL.md",
+    "INSTALLATION.md",
     ".env.template"
   ]
 }

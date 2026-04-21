@@ -88,7 +88,7 @@ case "$METHOD" in
     echo "4. Scan the QR code"
     echo "5. The linked device appears as 'Geoclaw'"
     echo ""
-    echo "Generate QR code now? (y/N): " GENERATE_QR
+    read -p "Generate QR code now? (y/N): " GENERATE_QR
     if [[ "$GENERATE_QR" =~ ^[Yy]$ ]]; then
       signal-cli link -n "Geoclaw"
     fi
@@ -153,7 +153,7 @@ update_env_var() {
   
   if grep -q "^$var_name=" "$ENV_FILE"; then
     # Update existing
-    sed -i.bak "s|^$var_name=.*|$var_name=$var_value|" "$ENV_FILE"
+    _sedi "s|^$var_name=.*|$var_name=$var_value|" "$ENV_FILE"
   else
     # Add new
     echo "$var_name=$var_value" >> "$ENV_FILE"
@@ -165,7 +165,6 @@ update_env_var "GEOCLAW_SIGNAL_ACCOUNT" "$SIGNAL_NUMBER"
 update_env_var "GEOCLAW_SIGNAL_CLI_PATH" "signal-cli"
 
 # Clean up backup file
-rm -f "$ENV_FILE.bak"
 
 echo ""
 echo "Configuration updated!"
@@ -175,17 +174,17 @@ echo "Step 4: Test Connection"
 echo "-----------------------"
 echo "1. Start Geoclaw: ./scripts/run.sh"
 echo "2. From your phone, send a message to $SIGNAL_NUMBER"
-echo "3. Check for pairing code: openclaw pairing list signal"
-echo "4. Approve pairing: openclaw pairing approve signal <CODE>"
+echo "3. Check for pairing code: geoclaw pairing list signal"
+echo "4. Approve pairing: geoclaw pairing approve signal <CODE>"
 echo "5. Send another message - bot should respond"
 echo ""
 
 echo "Step 5: Pairing Management"
 echo "--------------------------"
 echo "To manage pairings:"
-echo "- List pending: openclaw pairing list signal"
-echo "- Approve: openclaw pairing approve signal <CODE>"
-echo "- Remove: openclaw pairing remove signal <NUMBER>"
+echo "- List pending: geoclaw pairing list signal"
+echo "- Approve: geoclaw pairing approve signal <CODE>"
+echo "- Remove: geoclaw pairing remove signal <NUMBER>"
 echo ""
 echo "For automatic approval of specific numbers, edit geoclaw.config.yml:"
 echo "  channels:"
