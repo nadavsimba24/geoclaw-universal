@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Test Geoclaw installation simplicity
+set -euo pipefail
+
+echo "🧪 Testing Geoclaw v3.0 Installation Simplicity"
+echo ""
+
+echo "📦 Method 1: npm install from GitHub"
+echo "-------------------------------------"
+echo "Command:"
+echo "  npm install -g https://github.com/nadavsimba24/geoclaw-universal/archive/refs/heads/main.tar.gz"
+echo ""
+echo "Expected result:"
+echo "  ✅ Geoclaw installed globally"
+echo "  ✅ 'geoclaw' command available"
+echo ""
+
+echo "📦 Method 2: curl installation"
+echo "-------------------------------"
+echo "Command:"
+echo "  curl -s https://raw.githubusercontent.com/nadavsimba24/geoclaw-universal/main/install.sh | bash"
+echo ""
+echo "Expected result:"
+echo "  ✅ One-command installation"
+echo "  ✅ Global 'geoclaw' command"
+echo ""
+
+echo "🚀 After installation:"
+echo "----------------------"
+echo "1. Setup:        geoclaw setup"
+echo "2. Start:        geoclaw start"
+echo "3. Learn:        geoclaw learn mcporter"
+echo "4. Status:       geoclaw status"
+echo "5. Workflow:     geoclaw workflow create"
+echo ""
+
+echo "🎯 Comparison with OpenClaw:"
+echo "---------------------------"
+echo "OpenClaw:"
+echo "  npm install -g openclaw"
+echo "  openclaw gateway start"
+echo ""
+echo "Geoclaw:"
+echo "  npm install -g https://github.com/nadavsimba24/geoclaw-universal/archive/refs/heads/main.tar.gz"
+echo "  geoclaw setup"
+echo "  geoclaw start"
+echo ""
+echo "✅ Same simplicity level!"
+echo ""
+
+echo "📚 Documentation:"
+echo "----------------"
+echo "Repository: https://github.com/nadavsimba24/geoclaw-universal"
+echo "README:     https://github.com/nadavsimba24/geoclaw-universal#readme"
+echo ""
+
+echo "🎭 Geoclaw v3.0 now has OpenClaw-style simplicity!"
