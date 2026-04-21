@@ -109,6 +109,22 @@ async function runScript(scriptName, args = []) {
     process.exit(1);
   }
 
+  // JS/MJS files must be run with node, not bash
+  const isNodeScript = scriptName.endsWith('.js') || scriptName.endsWith('.mjs');
+
+  if (isNodeScript) {
+    return new Promise((resolve, reject) => {
+      const child = spawn('node', [scriptPath, ...args], {
+        stdio: 'inherit',
+        env: { ...process.env, GEOCLAW_DIR: __dirname },
+      });
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Script exited with code ${code}`));
+      });
+    });
+  }
+
   const sh = detectShell();
 
   if (!sh) {
@@ -127,7 +143,6 @@ Geoclaw scripts require bash. Please install one of:
 
   console.log(`ℹ️  Running on ${sh.type}`);
 
-  // Build spawn args depending on shell type
   let cmd, cmdArgs;
   if (sh.shell === 'wsl') {
     cmd = 'wsl';

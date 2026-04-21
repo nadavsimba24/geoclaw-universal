@@ -59,5 +59,6 @@ generated/
 *.qgz
 *.qgs
 
-# n8n workflows
-*.json
+# n8n workflow exports (don't ignore all json — package.json must be tracked)
+n8n-workflows/*.json
+workflows/*.json

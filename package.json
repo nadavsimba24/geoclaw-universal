@@ -1,0 +1,57 @@
+{
+  "name": "geoclaw-universal",
+  "version": "3.0.0",
+  "description": "Geoclaw v3.0 - Universal Agent Platform with complete automation ecosystem integration",
+  "bin": {
+    "geoclaw": "geoclaw.mjs"
+  },
+  "scripts": {
+    "start": "node geoclaw.mjs start",
+    "setup": "node geoclaw.mjs setup",
+    "test": "bash test-installation.sh"
+  },
+  "keywords": [
+    "geoclaw",
+    "openclaw",
+    "ai-agent",
+    "automation",
+    "workflow",
+    "mcp",
+    "n8n",
+    "qgis",
+    "postgis",
+    "web-scraping",
+    "orchestration"
+  ],
+  "author": "Geoclaw Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.0.0",
+    "pg": "^8.11.0",
+    "puppeteer": "^21.0.0",
+    "yaml": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nadavsimba24/geoclaw-universal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nadavsimba24/geoclaw-universal/issues"
+  },
+  "homepage": "https://github.com/nadavsimba24/geoclaw-universal#readme",
+  "files": [
+    "geoclaw.mjs",
+    "scripts/",
+    "references/",
+    "package.json",
+    "README.md",
+    "SKILL.md",
+    ".env.template"
+  ]
+}

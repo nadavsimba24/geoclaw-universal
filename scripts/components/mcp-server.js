@@ -542,7 +542,7 @@ async function handleGetCapabilities(args) {
     // Messaging
     messaging: {
       slack: process.env.GEOCLAW_SLACK_ENABLED === "true",
-      telegram: process.env.GELEGRAM_ENABLED === "true",
+      telegram: process.env.GEOCLAW_TELEGRAM_ENABLED === "true",
       whatsapp: process.env.GEOCLAW_WHATSAPP_ENABLED === "true",
       signal: process.env.GEOCLAW_SIGNAL_ENABLED === "true",
       description: "Multi-channel communication"
