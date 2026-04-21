@@ -144,10 +144,20 @@ Geoclaw scripts require bash. Please install one of:
 
   console.log(`ℹ️  Running on ${sh.type}`);
 
-  let cmd, cmdArgs;
+  let cmd, cmdArgs, scriptPathForShell = scriptPath, geoclawDirForShell = __dirname;
   if (sh.shell === 'wsl') {
+    // Convert Windows paths (C:\foo\bar) to WSL paths (/mnt/c/foo/bar)
+    // so bash can actually find the script inside WSL.
+    try {
+      scriptPathForShell = execSync(`wsl wslpath -u "${scriptPath.replace(/"/g, '\\"')}"`, { encoding: 'utf8' }).trim();
+      geoclawDirForShell = execSync(`wsl wslpath -u "${__dirname.replace(/"/g, '\\"')}"`, { encoding: 'utf8' }).trim();
+    } catch (e) {
+      console.error('❌ Failed to translate Windows path to WSL path:', e.message);
+      console.error('   Try running from WSL directly, or install Git Bash.');
+      process.exit(1);
+    }
     cmd = 'wsl';
-    cmdArgs = ['bash', scriptPath, ...args];
+    cmdArgs = ['bash', scriptPathForShell, ...args];
   } else {
     cmd = sh.shell;
     cmdArgs = [scriptPath, ...args];
@@ -156,7 +166,7 @@ Geoclaw scripts require bash. Please install one of:
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, cmdArgs, {
       stdio: 'inherit',
-      env: { ...process.env, GEOCLAW_DIR: __dirname },
+      env: { ...process.env, GEOCLAW_DIR: geoclawDirForShell },
     });
 
     child.on('close', (code) => {
