@@ -22,6 +22,30 @@ const MODEL    = env('GEOCLAW_MODEL_NAME', 'deepseek-chat');
 const API_KEY  = env('GEOCLAW_MODEL_API_KEY');
 const BASE_URL = env('GEOCLAW_MODEL_BASE_URL');
 
+// ── ANSI palette ──────────────────────────────────────────────────────────────
+const C = {
+  reset:   '\x1b[0m',
+  dim:     '\x1b[2m',
+  bold:    '\x1b[1m',
+  cyan:    '\x1b[36m',
+  green:   '\x1b[32m',
+  yellow:  '\x1b[33m',
+  red:     '\x1b[31m',
+  gray:    '\x1b[90m',
+  orange:  '\x1b[38;5;208m',
+  violet:  '\x1b[38;5;141m',
+  teal:    '\x1b[38;5;80m',
+  rose:    '\x1b[38;5;211m',
+};
+const USE_COLOR = !!process.stdout.isTTY && !process.env.NO_COLOR;
+const col = (code, s) => USE_COLOR ? `${code}${s}${C.reset}` : String(s);
+
+const hideCursor = () => { if (USE_COLOR) process.stdout.write('\x1b[?25l'); };
+const showCursor = () => { if (USE_COLOR) process.stdout.write('\x1b[?25h'); };
+process.on('exit', showCursor);
+process.on('SIGINT',  () => { showCursor(); process.exit(130); });
+process.on('SIGTERM', () => { showCursor(); process.exit(143); });
+
 const SYSTEM_PROMPT = `You are Geoclaw, a friendly and capable AI assistant.
 You have access to integrations the user has enabled: Monday.com, n8n, Telegram, MCP tools, memory, and more.
 If the user asks you to DO something that requires one of those integrations, tell them the exact command to run (e.g. 'geoclaw monday boards', 'geoclaw agent "your goal"').
@@ -43,9 +67,182 @@ function buildSystemPrompt(userMessage) {
   return `${base}\n\n## Relevant knowledge base context:\n${facts}`;
 }
 
-// ── Generic HTTP helpers ──────────────────────────────────────────────────────
+// ── Spinner ───────────────────────────────────────────────────────────────────
+const SPINNER_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+const QUIPS = [
+  'Thinking', 'Pondering', 'Consulting memory', 'Wiring it up',
+  'Cooking up a reply', 'Turning cogs', 'Combing context',
+  'Drafting', 'Tuning tokens', 'Synthesizing', 'Mulling',
+  'Sharpening pencils', 'Warming up',
+];
+function pickQuip() { return QUIPS[Math.floor(Math.random() * QUIPS.length)]; }
 
-function post(urlStr, headers, body) {
+function makeSpinner() {
+  let i = 0, t0 = Date.now(), timer = null, quip = pickQuip(), rotator = null;
+  const render = () => {
+    const secs = ((Date.now() - t0) / 1000).toFixed(1);
+    const frame = SPINNER_FRAMES[i++ % SPINNER_FRAMES.length];
+    const msg = `\r\x1b[2K  ${col(C.orange, frame)} ${col(C.bold, quip)}${col(C.dim, '  ' + secs + 's')}`;
+    process.stdout.write(msg);
+  };
+  return {
+    start() {
+      if (!USE_COLOR) { process.stdout.write('  thinking...\n'); return; }
+      hideCursor();
+      render();
+      timer   = setInterval(render, 80);
+      rotator = setInterval(() => { quip = pickQuip(); }, 3500);
+    },
+    stop() {
+      if (timer)   clearInterval(timer);
+      if (rotator) clearInterval(rotator);
+      if (USE_COLOR) process.stdout.write('\r\x1b[2K');
+      showCursor();
+    },
+  };
+}
+
+// ── Streaming HTTP (SSE) ──────────────────────────────────────────────────────
+
+function postStream(urlStr, headers, body, onEvent) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    const lib = u.protocol === 'https:' ? https : http;
+    const data = typeof body === 'string' ? body : JSON.stringify(body);
+    const req = lib.request(u, {
+      method: 'POST',
+      headers: { 'Content-Length': Buffer.byteLength(data), ...headers },
+    }, (res) => {
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        let errChunks = '';
+        res.on('data', (c) => (errChunks += c));
+        res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${errChunks.slice(0, 400)}`)));
+        return;
+      }
+      let buf = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        buf += chunk;
+        let idx;
+        while ((idx = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, idx).replace(/\r$/, '');
+          buf = buf.slice(idx + 1);
+          if (!line || !line.startsWith('data:')) continue;
+          const payload = line.slice(5).trimStart();
+          if (payload === '[DONE]') continue;
+          try { onEvent(JSON.parse(payload)); } catch { /* ignore keepalives */ }
+        }
+      });
+      res.on('end', resolve);
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+// ── Streaming provider adapters ───────────────────────────────────────────────
+// Each returns { reply: string, usage: object|null } and calls onDelta(text) as chunks arrive.
+
+async function streamOpenAIish(messages, endpoint, onDelta) {
+  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
+  const url = BASE_URL ? `${BASE_URL.replace(/\/+$/, '')}/chat/completions` : endpoint;
+  let reply = '';
+  let usage = null;
+  await postStream(url, {
+    'Authorization': `Bearer ${API_KEY}`,
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
+  }, { model: MODEL, messages, stream: true }, (evt) => {
+    const delta = evt.choices?.[0]?.delta?.content;
+    if (delta) { reply += delta; onDelta(delta); }
+    if (evt.usage) usage = evt.usage;
+  });
+  return { reply, usage };
+}
+
+async function streamAnthropic(messages, onDelta) {
+  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
+  const system = messages.find(m => m.role === 'system')?.content ?? '';
+  const rest   = messages.filter(m => m.role !== 'system');
+  let reply = '';
+  let usage = null;
+  await postStream('https://api.anthropic.com/v1/messages', {
+    'x-api-key': API_KEY,
+    'anthropic-version': '2023-06-01',
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
+  }, { model: MODEL, system, messages: rest, max_tokens: 4096, stream: true }, (evt) => {
+    if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+      reply += evt.delta.text;
+      onDelta(evt.delta.text);
+    }
+    if (evt.type === 'message_delta' && evt.usage) usage = evt.usage;
+    if (evt.type === 'message_start'  && evt.message?.usage) usage = { ...(usage || {}), ...evt.message.usage };
+  });
+  return { reply, usage };
+}
+
+// Google: no zero-dep SSE helper is easy here — do a blocking fetch, then typewrite.
+async function streamGoogle(messages, onDelta) {
+  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
+  const contents = messages.filter(m => m.role !== 'system')
+    .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  const system = messages.find(m => m.role === 'system')?.content;
+  const body = { contents, ...(system && { systemInstruction: { parts: [{ text: system }] } }) };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
+  const data = await jsonPost(url, { 'Content-Type': 'application/json' }, body);
+  const reply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '[no content]';
+  await typewrite(reply, onDelta);
+  return { reply, usage: data.usageMetadata ?? null };
+}
+
+async function streamOllama(messages, onDelta) {
+  const url = (BASE_URL || 'http://localhost:11434').replace(/\/+$/, '') + '/api/chat';
+  const u = new URL(url);
+  const lib = u.protocol === 'https:' ? https : http;
+  const data = JSON.stringify({ model: MODEL, messages, stream: true });
+  let reply = '';
+  await new Promise((resolve, reject) => {
+    const req = lib.request(u, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+    }, (res) => {
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        let errChunks = '';
+        res.on('data', (c) => (errChunks += c));
+        res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${errChunks.slice(0, 400)}`)));
+        return;
+      }
+      let buf = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        buf += chunk;
+        let idx;
+        while ((idx = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, idx).replace(/\r$/, '');
+          buf = buf.slice(idx + 1);
+          if (!line) continue;
+          try {
+            const j = JSON.parse(line);
+            const d = j.message?.content;
+            if (d) { reply += d; onDelta(d); }
+          } catch { /* ignore */ }
+        }
+      });
+      res.on('end', resolve);
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+  return { reply, usage: null };
+}
+
+// Shared non-stream JSON POST (used only by google adapter)
+function jsonPost(urlStr, headers, body) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const lib = u.protocol === 'https:' ? https : http;
@@ -70,83 +267,61 @@ function post(urlStr, headers, body) {
   });
 }
 
-// ── Provider adapters ─────────────────────────────────────────────────────────
-// Each returns { reply: string, usage: object|null }
-
-async function chatOpenAICompatible(messages, endpoint) {
-  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
-  const url = BASE_URL
-    ? `${BASE_URL.replace(/\/+$/, '')}/chat/completions`
-    : endpoint;
-  const data = await post(url, {
-    'Authorization': `Bearer ${API_KEY}`,
-    'Content-Type': 'application/json',
-  }, { model: MODEL, messages, stream: false });
-  return {
-    reply: data.choices?.[0]?.message?.content ?? '[no content]',
-    usage: data.usage ?? null,
-  };
+async function typewrite(text, onDelta, perChunkMs = 10) {
+  const parts = text.match(/\S+\s*|\s+/g) || [text];
+  for (const p of parts) {
+    onDelta(p);
+    if (perChunkMs) await new Promise(r => setTimeout(r, perChunkMs));
+  }
 }
 
-async function chatDeepSeek(messages)  { return chatOpenAICompatible(messages, 'https://api.deepseek.com/chat/completions'); }
-async function chatOpenAI(messages)    { return chatOpenAICompatible(messages, 'https://api.openai.com/v1/chat/completions'); }
-async function chatCustom(messages)    { return chatOpenAICompatible(messages, ''); }
-
-async function chatAnthropic(messages) {
-  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
-  const system = messages.find(m => m.role === 'system')?.content ?? '';
-  const rest   = messages.filter(m => m.role !== 'system');
-  const data = await post('https://api.anthropic.com/v1/messages', {
-    'x-api-key': API_KEY,
-    'anthropic-version': '2023-06-01',
-    'Content-Type': 'application/json',
-  }, { model: MODEL, system, messages: rest, max_tokens: 4096 });
-  return { reply: data.content?.[0]?.text ?? '[no content]', usage: data.usage ?? null };
-}
-
-async function chatGoogle(messages) {
-  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
-  const contents = messages
-    .filter(m => m.role !== 'system')
-    .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-  const system = messages.find(m => m.role === 'system')?.content;
-  const body = { contents, ...(system && { systemInstruction: { parts: [{ text: system }] } }) };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
-  const data = await post(url, { 'Content-Type': 'application/json' }, body);
-  return {
-    reply: data.candidates?.[0]?.content?.parts?.[0]?.text ?? '[no content]',
-    usage: data.usageMetadata ?? null,
-  };
-}
-
-async function chatOllama(messages) {
-  const url = (BASE_URL || 'http://localhost:11434').replace(/\/+$/, '') + '/api/chat';
-  const data = await post(url, { 'Content-Type': 'application/json' }, {
-    model: MODEL, messages, stream: false,
-  });
-  return { reply: data.message?.content ?? '[no content]', usage: null };
-}
-
-function dispatch(messages) {
+function dispatch(messages, onDelta) {
   switch (PROVIDER) {
-    case 'deepseek':  return chatDeepSeek(messages);
-    case 'openai':    return chatOpenAI(messages);
-    case 'anthropic': return chatAnthropic(messages);
-    case 'google':    return chatGoogle(messages);
-    case 'ollama':    return chatOllama(messages);
-    default:          return chatCustom(messages);
+    case 'deepseek':  return streamOpenAIish(messages, 'https://api.deepseek.com/chat/completions', onDelta);
+    case 'openai':    return streamOpenAIish(messages, 'https://api.openai.com/v1/chat/completions', onDelta);
+    case 'anthropic': return streamAnthropic(messages, onDelta);
+    case 'google':    return streamGoogle(messages, onDelta);
+    case 'ollama':    return streamOllama(messages, onDelta);
+    default:          return streamOpenAIish(messages, '', onDelta);
   }
 }
 
 // ── Interactive REPL ──────────────────────────────────────────────────────────
 
 function banner() {
+  const w = Math.min((process.stdout.columns || 80), 78);
+  const inner = w - 2;
+  const hline = '─'.repeat(inner);
+  const pad = (s, visibleLen) => s + ' '.repeat(Math.max(0, inner - visibleLen));
+
+  const title  = '  ✳ Geoclaw Chat';
+  const tag    = '  your universal agent platform';
+
   console.log('');
-  console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log('║                      Geoclaw Chat                            ║');
-  console.log('╚══════════════════════════════════════════════════════════════╝');
-  console.log(`Provider: ${PROVIDER}  |  Model: ${MODEL}  |  Workspace: ${memory.activeWorkspace()}`);
-  console.log('Type your message. Commands: /exit, /clear, /system, /voice, /help');
+  console.log(col(C.violet, `┌${hline}┐`));
+  console.log(col(C.violet, '│') + col(C.bold,  pad(title, title.length)) + col(C.violet, '│'));
+  console.log(col(C.violet, '│') + col(C.dim,   pad(tag,   tag.length))   + col(C.violet, '│'));
+  console.log(col(C.violet, `└${hline}┘`));
+
+  const info = `  ${col(C.teal, PROVIDER)} ${col(C.dim, '·')} ${col(C.bold, MODEL)} ${col(C.dim, '·')} ws: ${col(C.cyan, memory.activeWorkspace())}`;
+  console.log(info);
+  console.log(col(C.dim, '  type a message, or /help for commands  ·  /exit to quit'));
+  console.log('');
+}
+
+function printHelp() {
+  console.log('');
+  console.log(col(C.bold, '  Commands'));
+  const rows = [
+    ['/exit',         'quit chat'],
+    ['/clear',        'reset conversation history'],
+    ['/system',       'show current system prompt'],
+    ['/voice on|off', 'toggle text-to-speech for replies'],
+    ['/help',         'this message'],
+  ];
+  for (const [cmd, desc] of rows) {
+    console.log(`  ${col(C.cyan, cmd.padEnd(15))} ${col(C.dim, desc)}`);
+  }
   console.log('');
 }
 
@@ -160,64 +335,78 @@ async function repl() {
   });
 
   const history = [{ role: 'system', content: SYSTEM_PROMPT }];
-  // Voice is opt-in via --voice flag or /voice on inside the REPL.
   let voiceOn = process.argv.slice(2).includes('--voice');
 
+  const PROMPT = `${col(C.cyan, '▌')} ${col(C.bold, 'you')} ${col(C.dim, '›')} `;
+  const MARKER = `${col(C.orange, '▌')} ${col(C.bold, 'geoclaw')} ${col(C.dim, '›')} `;
+
   const ask = () => {
-    rl.question('\x1b[36myou ›\x1b[0m ', async (line) => {
+    rl.question(PROMPT, async (line) => {
       const text = line.trim();
       if (!text) return ask();
 
       if (text === '/exit' || text === '/quit') {
-        console.log('bye.');
+        console.log(col(C.dim, '  bye.'));
         rl.close();
         return;
       }
       if (text === '/clear') {
         history.length = 1;
-        console.log('(history cleared)');
+        console.log(col(C.dim, '  (history cleared)'));
+        console.log('');
         return ask();
       }
-      if (text === '/help') {
-        console.log('/exit           quit chat');
-        console.log('/clear          reset conversation history');
-        console.log('/system         show current system prompt');
-        console.log('/voice on|off   toggle text-to-speech for replies');
-        console.log('/help           show this help');
-        return ask();
-      }
+      if (text === '/help') { printHelp(); return ask(); }
       if (text === '/system') {
-        console.log(history[0].content);
+        console.log('');
+        console.log(col(C.dim, history[0].content));
+        console.log('');
         return ask();
       }
       if (text.startsWith('/voice')) {
         const mode = text.split(/\s+/)[1];
-        if (mode === 'on')       { voiceOn = true;  console.log('(voice on)'); }
-        else if (mode === 'off') { voiceOn = false; console.log('(voice off)'); }
-        else console.log(`(voice ${voiceOn ? 'on' : 'off'} — use /voice on or /voice off)`);
+        if (mode === 'on')       { voiceOn = true;  console.log(col(C.dim, '  (voice on)')); }
+        else if (mode === 'off') { voiceOn = false; console.log(col(C.dim, '  (voice off)')); }
+        else console.log(col(C.dim, `  (voice ${voiceOn ? 'on' : 'off'} — use /voice on or /voice off)`));
+        console.log('');
         return ask();
       }
 
       history.push({ role: 'user', content: text });
-      process.stdout.write('\x1b[32mgeoclaw ›\x1b[0m thinking...\r');
-
-      // Update system message with memories relevant to this turn
       history[0] = { role: 'system', content: buildSystemPrompt(text) };
 
-      try {
-        const { reply, usage } = await dispatch(history);
-        process.stdout.write('\x1b[2K'); // clear the "thinking..." line
-        console.log(`\x1b[32mgeoclaw ›\x1b[0m ${reply}`);
-        if (usage) {
-          const tokens = usage.total_tokens ?? (usage.input_tokens + usage.output_tokens) ?? '';
-          if (tokens) console.log(`\x1b[90m(${tokens} tokens)\x1b[0m`);
+      const spin = makeSpinner();
+      spin.start();
+
+      let firstChunk = true;
+      const onDelta = (delta) => {
+        if (firstChunk) {
+          spin.stop();
+          process.stdout.write(MARKER);
+          firstChunk = false;
         }
+        process.stdout.write(delta);
+      };
+
+      const t0 = Date.now();
+      try {
+        const { reply, usage } = await dispatch(history, onDelta);
+        if (firstChunk) { spin.stop(); process.stdout.write(MARKER); }
+        process.stdout.write('\n');
+
+        const secs = ((Date.now() - t0) / 1000).toFixed(1);
+        const tokens = usage
+          ? (usage.total_tokens ?? ((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0)) ?? 0)
+          : 0;
+        const stats = tokens ? `${tokens} tokens · ${secs}s` : `${secs}s`;
+        console.log(col(C.dim, `  ${stats}`));
+
         history.push({ role: 'assistant', content: reply });
         if (voiceOn) tts.speak(reply, { silent: true }).catch(() => {});
       } catch (err) {
-        process.stdout.write('\x1b[2K');
-        console.log(`\x1b[31merror:\x1b[0m ${err.message}`);
-        history.pop(); // don't keep the failed user turn around
+        spin.stop();
+        console.log(`  ${col(C.red, '✗')} ${err.message}`);
+        history.pop();
       }
 
       console.log('');
@@ -226,7 +415,7 @@ async function repl() {
   };
 
   ask();
-  rl.on('close', () => process.exit(0));
+  rl.on('close', () => { showCursor(); process.exit(0); });
 }
 
 // ── One-shot mode: geoclaw chat "your question" ───────────────────────────────
@@ -236,12 +425,13 @@ async function oneShot(prompt) {
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: prompt },
   ];
-  const { reply } = await dispatch(messages);
-  console.log(reply);
+  await dispatch(messages, (d) => process.stdout.write(d));
+  process.stdout.write('\n');
 }
 
 if (require.main === module) {
-  const arg = process.argv.slice(2).join(' ').trim();
-  if (arg) oneShot(arg).catch((e) => { console.error(`❌ ${e.message}`); process.exit(1); });
+  const args = process.argv.slice(2).filter(a => a !== '--voice');
+  const arg  = args.join(' ').trim();
+  if (arg) oneShot(arg).catch((e) => { console.error(`${col(C.red, '✗')} ${e.message}`); process.exit(1); });
   else     repl();
 }
