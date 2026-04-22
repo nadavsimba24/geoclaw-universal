@@ -144,7 +144,12 @@ async function ingest(filepath, opts = {}) {
   console.log(`✅ Saved ${newCount} new chunk(s) from ${basename}` +
     (deduped > 0 ? ` (${deduped} already existed, skipped)` : ''));
   console.log(`   Search with: geoclaw recall "your question"`);
-  return saved;
+  const result = { ids: saved, new: newCount, deduped, source: basename };
+  // Backwards-compat: callers that did `for...of` or `.length` on the old array
+  // still work because we attach length and iterator to the result object.
+  Object.defineProperty(result, 'length', { get() { return this.ids.length; } });
+  result[Symbol.iterator] = function* () { for (const id of this.ids) yield id; };
+  return result;
 }
 
 async function removeSource(source, opts = {}) {
