@@ -531,4 +531,4 @@ Examples:
   });
 }
 
-module.exports = { runAgent, toolDefinitions };
+module.exports = { runAgent, toolDefinitions, callTool };
