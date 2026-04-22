@@ -184,16 +184,27 @@ function buildSkillsManifest({ max = 40 } = {}) {
 
 function runNpx(args, { cwd = process.cwd(), timeoutMs = NPX_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn('npx', ['-y', SKILLS_IL_PACKAGE, ...args], {
+    // On Windows, `npx` is `npx.cmd` — Node's spawn won't resolve the .cmd
+    // shim without `shell: true`. Linux/macOS tolerate `shell: true` fine.
+    const isWin = process.platform === 'win32';
+    const cmd = isWin ? 'npx.cmd' : 'npx';
+    const child = spawn(cmd, ['-y', SKILLS_IL_PACKAGE, ...args], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env },
+      shell: isWin,
     });
     let out = '', err = '';
     child.stdout.on('data', (c) => (out += c));
     child.stderr.on('data', (c) => (err += c));
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
-    child.on('error', (e) => { clearTimeout(timer); reject(e); });
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      if (e.code === 'ENOENT') {
+        return reject(new Error('npx not found on PATH. Install Node.js (includes npx) from https://nodejs.org, restart your terminal, then try again.'));
+      }
+      reject(e);
+    });
     child.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve({ ok: true, stdout: out, stderr: err });
