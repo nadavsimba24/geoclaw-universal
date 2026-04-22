@@ -53,6 +53,7 @@
     "README.md",
     "SKILL.md",
     "INSTALLATION.md",
+    "SETUP-GUIDE.md",
     ".env.template"
   ]
 }

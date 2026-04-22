@@ -380,6 +380,9 @@ main() {
   echo "This wizard will configure all 10 Geoclaw component groups."
   echo "Press Enter to accept the default for any prompt."
   echo ""
+  echo -e "${CYAN}📖 Need help deciding? Read the setup guide:${NC}"
+  echo "   https://github.com/nadavsimba24/geoclaw-universal/blob/main/SETUP-GUIDE.md"
+  echo ""
 
   ensure_env_file
 
