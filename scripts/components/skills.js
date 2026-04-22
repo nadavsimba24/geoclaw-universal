@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const https = require('https');
+const zlib = require('zlib');
 const { spawn, spawnSync } = require('child_process');
 const readline = require('readline');
 const { URL } = require('url');
@@ -227,18 +228,177 @@ async function addFromRegistry(source, { scope = 'global', agents = ['claude-cod
 }
 
 async function installBundle(slug, opts = {}) {
-  const args = ['add-bundle', slug];
-  if ((opts.scope || 'global') === 'global') args.push('-g');
-  if (opts.yes !== false) args.push('-y');
-  const result = await runNpx(args);
-  mirrorInstalledSkills({ scope: opts.scope || 'global' });
-  return result;
+  // We install bundles directly from GitHub instead of going through
+  // `npx skills-il`. Rationale: skills-il uses simple-git internally, which
+  // invokes a full `git` path — on Windows that path contains spaces
+  // ("C:\Program Files\Git\..."), which trips up the spawn and makes every
+  // bundle install fail. Fetching tarballs with built-in Node modules has
+  // no such problem and removes the npm/npx/git dependency entirely.
+  try {
+    return await installBundleDirect(slug, opts);
+  } catch (e) {
+    // Surface the direct-install error. If we ever want to retry via npx as
+    // a safety net we can add it here, but the direct path is more reliable.
+    throw e;
+  }
+}
+
+async function installBundleDirect(slug, { scope = 'global', onProgress } = {}) {
+  const bundle = await httpJSON(
+    `https://raw.githubusercontent.com/skills-il/bundles/master/${encodeURIComponent(slug)}/bundle.json`
+  );
+  if (!Array.isArray(bundle.skills) || !bundle.skills.length) {
+    throw new Error(`bundle "${slug}" has no skills (check spelling; try \`geoclaw skills bundles\`)`);
+  }
+
+  const destRoot = scope === 'global' ? GLOBAL_SKILLS : PROJECT_SKILLS_A;
+  ensureDir(destRoot);
+
+  // Group by repo so we only download each source tarball once.
+  const byRepo = new Map();
+  for (const s of bundle.skills) {
+    if (!s.repo || !s.slug) continue;
+    const key = s.repo;
+    if (!byRepo.has(key)) byRepo.set(key, []);
+    byRepo.get(key).push(s);
+  }
+
+  const installed = [];
+  const failed = [];
+
+  for (const [repo, skillsInRepo] of byRepo) {
+    let tarball;
+    try {
+      tarball = await downloadRepoTarball(repo);
+    } catch (e) {
+      for (const s of skillsInRepo) failed.push({ slug: s.slug, error: e.message });
+      continue;
+    }
+    for (const s of skillsInRepo) {
+      const dest = path.join(destRoot, s.slug);
+      try {
+        // Clean any stale install so re-running is idempotent.
+        if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true, force: true });
+        ensureDir(dest);
+        const pathPrefix = (s.path || '').replace(/\/+$/, '') + '/';
+        let n = 0;
+        extractTarGz(tarball, pathPrefix, (relPath, data) => {
+          if (!relPath) return;
+          const outFile = path.join(dest, relPath);
+          ensureDir(path.dirname(outFile));
+          fs.writeFileSync(outFile, data);
+          n++;
+        });
+        if (!fs.existsSync(path.join(dest, 'SKILL.md'))) {
+          throw new Error(`no SKILL.md found at ${repo}/${s.path}`);
+        }
+        installed.push(s.slug);
+        if (onProgress) onProgress({ slug: s.slug, files: n, ok: true });
+      } catch (e) {
+        failed.push({ slug: s.slug, error: e.message });
+        if (onProgress) onProgress({ slug: s.slug, ok: false, error: e.message });
+      }
+    }
+  }
+
+  return {
+    ok: installed.length > 0 && failed.length === 0,
+    bundle: { slug, name: bundle.name_en || slug, count: bundle.skills.length },
+    installed,
+    failed,
+  };
+}
+
+// ── Plain-HTTP helpers + minimal tar.gz reader (Windows-safe, no deps) ───────
+
+function httpBuffer(url, redirects = 5) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'geoclaw-skills' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        return httpBuffer(new URL(res.headers.location, url).toString(), redirects - 1).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+      }
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(60000, () => req.destroy(new Error(`timeout fetching ${url}`)));
+  });
+}
+
+async function httpJSON(url) {
+  const buf = await httpBuffer(url);
+  try { return JSON.parse(buf.toString('utf8')); }
+  catch { throw new Error(`bad JSON at ${url}`); }
+}
+
+async function downloadRepoTarball(repo) {
+  // Try default branch (master) first, then main, then HEAD.
+  const refs = ['master', 'main', 'HEAD'];
+  let lastErr;
+  for (const ref of refs) {
+    try {
+      return await httpBuffer(`https://codeload.github.com/${repo}/tar.gz/${ref}`);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error(`could not download ${repo} tarball`);
+}
+
+function extractTarGz(buf, pathPrefix, writer) {
+  const unzipped = zlib.gunzipSync(buf);
+  let offset = 0;
+  while (offset + 512 <= unzipped.length) {
+    const header = unzipped.subarray(offset, offset + 512);
+    if (header[0] === 0) break; // end-of-archive
+    const name = header.subarray(0, 100).toString('utf8').replace(/\0.*$/, '');
+    const sizeStr = header.subarray(124, 136).toString('utf8').replace(/\0.*$/, '').trim();
+    const size = parseInt(sizeStr, 8) || 0;
+    const typeFlag = String.fromCharCode(header[156]);
+    const prefixField = header.subarray(345, 500).toString('utf8').replace(/\0.*$/, '');
+    const fullName = prefixField ? `${prefixField}/${name}` : name;
+    offset += 512;
+    // Strip the leading `<repo>-<sha>/` segment that GitHub adds.
+    const relPath = fullName.replace(/^[^/]+\//, '');
+    if ((typeFlag === '0' || typeFlag === '\0') && size > 0 && relPath.startsWith(pathPrefix)) {
+      const data = unzipped.subarray(offset, offset + size);
+      writer(relPath.slice(pathPrefix.length).replace(/^\/+/, ''), data);
+    }
+    offset += Math.ceil(size / 512) * 512;
+  }
 }
 
 async function listBundles() {
-  // skills-il bundles command returns a human-readable list; we capture it.
-  try { return await runNpx(['bundles']); }
-  catch (e) { return { ok: false, error: e.message }; }
+  // Direct fetch from the skills-il/bundles repo — no npx, no git.
+  try {
+    const items = await httpJSON(
+      'https://api.github.com/repos/skills-il/bundles/contents?ref=master'
+    );
+    const dirs = (items || []).filter((i) => i.type === 'dir');
+    const bundles = [];
+    for (const d of dirs) {
+      try {
+        const data = await httpJSON(
+          `https://raw.githubusercontent.com/skills-il/bundles/master/${encodeURIComponent(d.name)}/bundle.json`
+        );
+        bundles.push({
+          slug: d.name,
+          name: data.name_en || d.name,
+          description: data.description_en || '',
+          icon: data.icon || '📦',
+          skillCount: Array.isArray(data.skills) ? data.skills.length : 0,
+        });
+      } catch {}
+    }
+    return { ok: true, bundles };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 // Mirror anything under common agent directories into ~/.geoclaw/skills/.
@@ -581,14 +741,34 @@ async function main(argv) {
     const slug = positional[0];
     if (!slug) { console.log('Usage: geoclaw skills install-bundle <slug>\n  See available bundles:  geoclaw skills bundles'); return; }
     console.log(`📦 Installing bundle "${slug}"...`);
-    try { const r = await installBundle(slug, { scope: flags.scope }); console.log(r.stdout); console.log('✅ Bundle installed.'); }
-    catch (e) { console.error('❌', e.message); process.exitCode = 1; }
+    try {
+      const r = await installBundle(slug, {
+        scope: flags.scope,
+        onProgress: ({ slug, ok, error }) => {
+          console.log(`  ${ok ? '✓' : '✗'} ${slug}${error ? ` — ${error}` : ''}`);
+        },
+      });
+      if (r.ok) console.log(`✅ Bundle "${r.bundle.name}" installed (${r.installed.length}/${r.bundle.count} skills).`);
+      else {
+        console.log(`⚠ Installed ${r.installed.length}/${r.bundle.count}. Failed: ${r.failed.map(f => f.slug).join(', ')}`);
+        process.exitCode = 1;
+      }
+    } catch (e) { console.error('❌', e.message); process.exitCode = 1; }
     return;
   }
 
   if (cmd === 'bundles') {
-    try { const r = await listBundles(); console.log(r.stdout || '(no output)'); }
-    catch (e) { console.error('❌', e.message); process.exitCode = 1; }
+    try {
+      const r = await listBundles();
+      if (!r.ok) { console.error('❌', r.error); process.exitCode = 1; return; }
+      console.log(`📦 Available bundles (${r.bundles.length}):\n`);
+      for (const b of r.bundles) {
+        console.log(`  ${b.icon} ${b.name} (${b.slug})`);
+        if (b.description) console.log(`     ${b.description}`);
+        console.log(`     ${b.skillCount} skills\n`);
+      }
+      console.log('Install:  geoclaw skills install-bundle <slug>');
+    } catch (e) { console.error('❌', e.message); process.exitCode = 1; }
     return;
   }
 

@@ -671,8 +671,13 @@ async function handle(req, res) {
     if (!body.slug) return sendJSON(res, 400, { ok: false, error: 'missing slug' });
     try {
       const r = await skills.installBundle(body.slug, { scope: body.scope || 'global' });
-      inboxPush({ kind: 'done', title: `bundle installed: ${body.slug}`, body: (r.stdout || '').slice(0, 200) });
-      return sendJSON(res, 200, { ok: true, stdout: r.stdout });
+      const title = r.ok
+        ? `bundle installed: ${r.bundle?.name || body.slug}`
+        : `bundle partial: ${body.slug} (${r.installed?.length || 0}/${r.bundle?.count || '?'})`;
+      const summary = `installed: ${r.installed?.join(', ') || 'none'}` +
+        (r.failed?.length ? ` · failed: ${r.failed.map(f => f.slug).join(', ')}` : '');
+      inboxPush({ kind: r.ok ? 'done' : 'error', title, body: summary.slice(0, 300) });
+      return sendJSON(res, 200, r);
     } catch (e) {
       return sendJSON(res, 500, { ok: false, error: e.message });
     }
