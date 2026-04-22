@@ -19,40 +19,121 @@
     </div>
 
     <nav class="nav">
+      <button class="nav-item" data-view="capabilities" data-i18n="nav.capabilities">
+        <span class="nav-icon">✨</span><span data-i18n-text="nav.capabilities">Capabilities</span>
+      </button>
       <button class="nav-item active" data-view="chat">
-        <span class="nav-icon">💬</span><span>Chat</span>
+        <span class="nav-icon">💬</span><span data-i18n-text="nav.chat">Chat</span>
+      </button>
+      <button class="nav-item" data-view="browser">
+        <span class="nav-icon">🌐</span><span data-i18n-text="nav.browser">Browser</span>
       </button>
       <button class="nav-item" data-view="inbox">
-        <span class="nav-icon">📥</span><span>Inbox</span>
+        <span class="nav-icon">📥</span><span data-i18n-text="nav.inbox">Inbox</span>
         <span class="badge" id="inbox-badge" hidden></span>
       </button>
       <button class="nav-item" data-view="agents">
-        <span class="nav-icon">🤖</span><span>Agents</span>
+        <span class="nav-icon">🤖</span><span data-i18n-text="nav.agents">Agents</span>
       </button>
       <button class="nav-item" data-view="autopilots">
-        <span class="nav-icon">🎯</span><span>Autopilots</span>
+        <span class="nav-icon">🎯</span><span data-i18n-text="nav.autopilots">Autopilots</span>
       </button>
       <button class="nav-item" data-view="files">
-        <span class="nav-icon">📁</span><span>Files</span>
+        <span class="nav-icon">📁</span><span data-i18n-text="nav.files">Files</span>
       </button>
       <button class="nav-item" data-view="skills">
-        <span class="nav-icon">🧩</span><span>Skills</span>
+        <span class="nav-icon">🧩</span><span data-i18n-text="nav.skills">Skills</span>
       </button>
       <button class="nav-item" data-view="design">
-        <span class="nav-icon">🎨</span><span>Design</span>
+        <span class="nav-icon">🎨</span><span data-i18n-text="nav.design">Design</span>
       </button>
       <button class="nav-item" data-view="settings">
-        <span class="nav-icon">⚙️</span><span>Settings</span>
+        <span class="nav-icon">⚙️</span><span data-i18n-text="nav.settings">Settings</span>
       </button>
     </nav>
 
     <div class="sidebar-footer">
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button class="lang-btn active" data-lang="en" title="English">EN</button>
+        <button class="lang-btn" data-lang="he" title="עברית">עב</button>
+      </div>
       <div class="provider-chip" id="provider-chip">deepseek · deepseek-chat</div>
       <div class="workspace-chip" id="workspace-chip">workspace: default</div>
     </div>
   </aside>
 
   <main class="main">
+    <!-- ── CAPABILITIES ─────────────────────────────────────────────────── -->
+    <section class="view" data-view="capabilities" hidden>
+      <header class="view-header">
+        <h1 data-i18n-text="cap.title">What Geoclaw can do</h1>
+      </header>
+      <p class="hint" data-i18n-text="cap.subtitle">A universal agent for Israeli organizations — chat, autonomous agents, web browsing, skills, and more, all local and private.</p>
+      <div class="cap-grid">
+        <button class="cap-card" data-cap-view="chat">
+          <div class="cap-icon">💬</div>
+          <h3 data-i18n-text="cap.chat.title">Smart chat</h3>
+          <p data-i18n-text="cap.chat.desc">Talk to your LLM with knowledge-base memory and real tools (Monday, Telegram, design-system).</p>
+        </button>
+        <button class="cap-card" data-cap-view="agents">
+          <div class="cap-icon">🤖</div>
+          <h3 data-i18n-text="cap.agents.title">Autonomous agents</h3>
+          <p data-i18n-text="cap.agents.desc">Give a goal — the agent plans, calls tools, spawns sub-agents, and reports back.</p>
+        </button>
+        <button class="cap-card" data-cap-view="browser">
+          <div class="cap-icon">🌐</div>
+          <h3 data-i18n-text="cap.browser.title">Web browser</h3>
+          <p data-i18n-text="cap.browser.desc">Fetch any URL and extract readable markdown with typed refs (link, button, input).</p>
+        </button>
+        <button class="cap-card" data-cap-view="skills">
+          <div class="cap-icon">🧩</div>
+          <h3 data-i18n-text="cap.skills.title">Israeli skills</h3>
+          <p data-i18n-text="cap.skills.desc">Install tax-season, legal, accounting, and government bundles from skills-il — Geoclaw sees them automatically.</p>
+        </button>
+        <button class="cap-card" data-cap-view="autopilots">
+          <div class="cap-icon">🎯</div>
+          <h3 data-i18n-text="cap.autopilots.title">Autopilots</h3>
+          <p data-i18n-text="cap.autopilots.desc">Schedule agents to run on cron (@hourly, @daily) — Geoclaw keeps working while you sleep.</p>
+        </button>
+        <button class="cap-card" data-cap-view="files">
+          <div class="cap-icon">📁</div>
+          <h3 data-i18n-text="cap.files.title">Document ingest</h3>
+          <p data-i18n-text="cap.files.desc">Upload PDFs, Word, Excel, Markdown — Geoclaw indexes them into your knowledge base.</p>
+        </button>
+        <button class="cap-card" data-cap-view="design">
+          <div class="cap-icon">🎨</div>
+          <h3 data-i18n-text="cap.design.title">Design system</h3>
+          <p data-i18n-text="cap.design.desc">Scaffold a DESIGN.md — Geoclaw themes the UI and generates on-brand components.</p>
+        </button>
+        <button class="cap-card" data-cap-view="inbox">
+          <div class="cap-icon">📥</div>
+          <h3 data-i18n-text="cap.inbox.title">Activity inbox</h3>
+          <p data-i18n-text="cap.inbox.desc">Every agent run, skill install, and file ingest lands here — a human-readable audit log.</p>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── BROWSER ──────────────────────────────────────────────────────── -->
+    <section class="view" data-view="browser" hidden>
+      <header class="view-header">
+        <h1 data-i18n-text="browser.title">Browser</h1>
+      </header>
+      <p class="hint" data-i18n-text="browser.hint">Fetch any URL. Geoclaw extracts the readable content as markdown with typed refs ([link 7], [button 9], [input text 12]) the agent can quote or describe.</p>
+      <form id="browser-form" class="browser-bar">
+        <input id="browser-url" type="url" placeholder="https://…" autocomplete="off" />
+        <button type="submit" class="primary" data-i18n-text="browser.go">Fetch</button>
+      </form>
+      <div class="browser-layout">
+        <article class="browser-content" id="browser-content">
+          <div class="empty" data-i18n-text="browser.empty">Enter a URL to fetch and extract readable markdown.</div>
+        </article>
+        <aside class="browser-refs" id="browser-refs" hidden>
+          <h3 data-i18n-text="browser.refs">Refs</h3>
+          <div id="browser-refs-list"></div>
+        </aside>
+      </div>
+    </section>
+
     <!-- ── CHAT ─────────────────────────────────────────────────────────── -->
     <section class="view" data-view="chat" hidden>
       <header class="chat-header">

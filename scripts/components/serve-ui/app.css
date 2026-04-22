@@ -645,3 +645,214 @@ body.drop-target::after {
   .sidebar-footer { display: none; }
   .chat-scroll { padding-bottom: 120px; }
 }
+
+/* ── Space-agent aesthetic overlay ────────────────────────────────────────
+   Adds a subtle neon-gradient accent, starfield sidebar, and new components
+   (capability grid, browser pane, lang toggle). Built on top of the tokens
+   above — everything still re-themes from DESIGN.md. */
+
+:root {
+  --neon-a: #7A5FE6;   /* violet */
+  --neon-b: #56C2C2;   /* teal */
+  --neon-c: #FF8C3C;   /* orange */
+  --grid-line: rgba(122, 95, 230, 0.08);
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(122, 95, 230, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 120% 110%, rgba(86, 194, 194, 0.08), transparent 55%),
+    var(--bg);
+}
+
+.sidebar {
+  background:
+    linear-gradient(180deg, rgba(122, 95, 230, 0.06), transparent 180px),
+    var(--bg-elev);
+  border-right: 1px solid var(--border-soft);
+}
+
+[dir="rtl"] .sidebar { border-right: none; border-left: 1px solid var(--border-soft); }
+
+.brand-mark {
+  background: linear-gradient(135deg, var(--neon-a), var(--neon-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 10px rgba(122, 95, 230, 0.4));
+}
+
+/* ── Language toggle ──────────────────────────────────────────────────── */
+.lang-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 3px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+}
+.lang-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.lang-btn:hover { color: var(--fg); }
+.lang-btn.active {
+  background: linear-gradient(135deg, var(--neon-a), var(--neon-b));
+  color: #fff;
+  box-shadow: 0 0 12px rgba(122, 95, 230, 0.35);
+}
+
+/* ── Capability grid ──────────────────────────────────────────────────── */
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  padding: 0 4px 40px;
+}
+.cap-card {
+  appearance: none;
+  text-align: start;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 18px 18px 20px;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  position: relative;
+  overflow: hidden;
+}
+.cap-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(122, 95, 230, 0.12), rgba(86, 194, 194, 0.06));
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+.cap-card:hover { transform: translateY(-2px); border-color: var(--neon-a); box-shadow: 0 8px 28px rgba(122, 95, 230, 0.18); }
+.cap-card:hover::before { opacity: 1; }
+.cap-card .cap-icon {
+  font-size: 26px;
+  line-height: 1;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 0 8px rgba(122, 95, 230, 0.25));
+}
+.cap-card h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; letter-spacing: 0.2px; }
+.cap-card p  { margin: 0; color: var(--fg-dim); font-size: 13.5px; line-height: 1.5; }
+
+/* ── Browser pane ─────────────────────────────────────────────────────── */
+.browser-bar {
+  display: flex;
+  gap: 8px;
+  margin: 4px 4px 14px;
+}
+.browser-bar input[type="url"] {
+  flex: 1;
+  background: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+}
+.browser-bar input[type="url"]:focus {
+  outline: none;
+  border-color: var(--neon-a);
+  box-shadow: 0 0 0 3px rgba(122, 95, 230, 0.15);
+}
+.browser-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 14px;
+  padding: 0 4px 40px;
+}
+[dir="rtl"] .browser-layout { grid-template-columns: 280px 1fr; }
+.browser-content {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  min-height: 240px;
+}
+.browser-page-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.browser-meta {
+  color: var(--fg-dimmer);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  margin-bottom: 14px;
+  word-break: break-all;
+}
+.browser-markdown {
+  margin: 0;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60vh;
+  overflow: auto;
+}
+.browser-refs {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 14px 14px 18px;
+  font-size: 13px;
+  height: fit-content;
+  max-height: 70vh;
+  overflow: auto;
+}
+.browser-refs h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.browser-ref {
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  margin-bottom: 4px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.browser-ref.clickable { cursor: pointer; }
+.browser-ref.clickable:hover { background: var(--hover); border-color: var(--border-soft); }
+.browser-ref .ref-id {
+  font-family: var(--font-mono);
+  color: var(--neon-b);
+  font-size: 11.5px;
+  margin-inline-end: 6px;
+}
+.browser-ref .ref-label { color: var(--fg-dim); word-break: break-word; }
+
+@media (max-width: 800px) {
+  .browser-layout { grid-template-columns: 1fr; }
+  [dir="rtl"] .browser-layout { grid-template-columns: 1fr; }
+}
+
+/* ── RTL polish ───────────────────────────────────────────────────────── */
+[dir="rtl"] .nav-item.active::before {
+  left: auto;
+  right: 0;
+  border-radius: 0 2px 2px 0;
+}
+[dir="rtl"] .chat-composer form { direction: rtl; }

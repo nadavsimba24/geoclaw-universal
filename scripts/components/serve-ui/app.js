@@ -114,7 +114,7 @@ q('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') clos
 
 // ── View switching ───────────────────────────────────────────────────────────
 
-const VIEWS = ['chat', 'inbox', 'agents', 'autopilots', 'files', 'skills', 'design', 'settings'];
+const VIEWS = ['capabilities', 'chat', 'browser', 'inbox', 'agents', 'autopilots', 'files', 'skills', 'design', 'settings'];
 function showView(name) {
   for (const v of VIEWS) {
     const section = q(`.view[data-view="${v}"]`);
@@ -823,11 +823,194 @@ q('#ws-use').addEventListener('click', async () => {
   catch (e) { toast(e.message, 'error'); }
 });
 
+// ── i18n (English / Hebrew) ──────────────────────────────────────────────────
+
+const I18N = {
+  en: {
+    'nav.capabilities': 'Capabilities',
+    'nav.chat': 'Chat',
+    'nav.browser': 'Browser',
+    'nav.inbox': 'Inbox',
+    'nav.agents': 'Agents',
+    'nav.autopilots': 'Autopilots',
+    'nav.files': 'Files',
+    'nav.skills': 'Skills',
+    'nav.design': 'Design',
+    'nav.settings': 'Settings',
+    'cap.title': 'What Geoclaw can do',
+    'cap.subtitle': 'A universal agent for Israeli organizations — chat, autonomous agents, web browsing, skills, and more, all local and private.',
+    'cap.chat.title': 'Smart chat',
+    'cap.chat.desc': 'Talk to your LLM with knowledge-base memory and real tools (Monday, Telegram, design-system).',
+    'cap.agents.title': 'Autonomous agents',
+    'cap.agents.desc': 'Give a goal — the agent plans, calls tools, spawns sub-agents, and reports back.',
+    'cap.browser.title': 'Web browser',
+    'cap.browser.desc': 'Fetch any URL and extract readable markdown with typed refs (link, button, input).',
+    'cap.skills.title': 'Israeli skills',
+    'cap.skills.desc': 'Install tax-season, legal, accounting, and government bundles from skills-il — Geoclaw sees them automatically.',
+    'cap.autopilots.title': 'Autopilots',
+    'cap.autopilots.desc': 'Schedule agents to run on cron (@hourly, @daily) — Geoclaw keeps working while you sleep.',
+    'cap.files.title': 'Document ingest',
+    'cap.files.desc': 'Upload PDFs, Word, Excel, Markdown — Geoclaw indexes them into your knowledge base.',
+    'cap.design.title': 'Design system',
+    'cap.design.desc': 'Scaffold a DESIGN.md — Geoclaw themes the UI and generates on-brand components.',
+    'cap.inbox.title': 'Activity inbox',
+    'cap.inbox.desc': 'Every agent run, skill install, and file ingest lands here — a human-readable audit log.',
+    'browser.title': 'Browser',
+    'browser.hint': 'Fetch any URL. Geoclaw extracts the readable content as markdown with typed refs ([link 7], [button 9], [input text 12]) the agent can quote or describe.',
+    'browser.go': 'Fetch',
+    'browser.empty': 'Enter a URL to fetch and extract readable markdown.',
+    'browser.refs': 'Refs',
+    'browser.fetching': 'Fetching…',
+    'browser.error': 'Fetch failed',
+  },
+  he: {
+    'nav.capabilities': 'יכולות',
+    'nav.chat': 'צ׳אט',
+    'nav.browser': 'דפדפן',
+    'nav.inbox': 'התראות',
+    'nav.agents': 'סוכנים',
+    'nav.autopilots': 'טייס אוטומטי',
+    'nav.files': 'קבצים',
+    'nav.skills': 'מיומנויות',
+    'nav.design': 'עיצוב',
+    'nav.settings': 'הגדרות',
+    'cap.title': 'מה Geoclaw יודע לעשות',
+    'cap.subtitle': 'סוכן אוניברסלי לארגונים ישראליים — צ׳אט, סוכנים אוטונומיים, גלישה, מיומנויות ועוד, הכל מקומי ופרטי.',
+    'cap.chat.title': 'צ׳אט חכם',
+    'cap.chat.desc': 'שוחחו עם ה-LLM עם זיכרון מבסיס-הידע וכלים אמיתיים (Monday, טלגרם, מערכת עיצוב).',
+    'cap.agents.title': 'סוכנים אוטונומיים',
+    'cap.agents.desc': 'תנו מטרה — הסוכן מתכנן, קורא לכלים, מפצל למשנה-סוכנים ומדווח בחזרה.',
+    'cap.browser.title': 'דפדפן',
+    'cap.browser.desc': 'הביאו כל URL וחלצו טקסט קריא כ-Markdown עם סימוני רכיבים (קישור, כפתור, שדה).',
+    'cap.skills.title': 'מיומנויות ישראליות',
+    'cap.skills.desc': 'התקינו חבילות עונת מיסים, משפט, ראיית חשבון וממשלה מ-skills-il — Geoclaw רואה אותן אוטומטית.',
+    'cap.autopilots.title': 'טייס אוטומטי',
+    'cap.autopilots.desc': 'תזמנו סוכנים ב-cron (@hourly, @daily) — Geoclaw ממשיך לעבוד בזמן שאתם ישנים.',
+    'cap.files.title': 'הזנת מסמכים',
+    'cap.files.desc': 'העלו PDF, וורד, אקסל, Markdown — Geoclaw מאנדקס אותם לבסיס-הידע שלכם.',
+    'cap.design.title': 'מערכת עיצוב',
+    'cap.design.desc': 'יצרו DESIGN.md — Geoclaw מעצב את הממשק ומייצר רכיבים לפי המותג.',
+    'cap.inbox.title': 'תיבת פעילות',
+    'cap.inbox.desc': 'כל ריצת סוכן, התקנת מיומנות והזנת קובץ נרשמים כאן — יומן ביקורת קריא.',
+    'browser.title': 'דפדפן',
+    'browser.hint': 'הביאו כל URL. Geoclaw מחלץ את התוכן הקריא כ-Markdown עם סימוני רכיבים ([link 7], [button 9], [input text 12]) שהסוכן יכול לצטט או לתאר.',
+    'browser.go': 'הבא',
+    'browser.empty': 'הזינו URL כדי להביא ולחלץ Markdown קריא.',
+    'browser.refs': 'רכיבים',
+    'browser.fetching': 'מביא…',
+    'browser.error': 'הבאה נכשלה',
+  },
+};
+
+function currentLang() {
+  return localStorage.getItem('geoclaw.lang') || 'en';
+}
+
+function t(key) {
+  const lang = currentLang();
+  return (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+}
+
+function applyI18n() {
+  const lang = currentLang();
+  document.documentElement.lang = lang;
+  document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
+  qa('[data-i18n-text]').forEach(el => { el.textContent = t(el.dataset.i18nText); });
+  qa('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+}
+
+qa('.lang-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    localStorage.setItem('geoclaw.lang', btn.dataset.lang);
+    applyI18n();
+  });
+});
+
+// ── Capabilities cards ───────────────────────────────────────────────────────
+qa('.cap-card').forEach(card => {
+  card.addEventListener('click', () => showView(card.dataset.capView));
+});
+
+// ── Browser pane ─────────────────────────────────────────────────────────────
+
+const browserForm = q('#browser-form');
+const browserContent = q('#browser-content');
+const browserRefs = q('#browser-refs');
+const browserRefsList = q('#browser-refs-list');
+
+function renderBrowserContent(res) {
+  browserContent.innerHTML = '';
+  if (!res || !res.ok) {
+    const err = document.createElement('div');
+    err.className = 'empty';
+    err.textContent = `${t('browser.error')}: ${(res && res.error) || 'unknown'}`;
+    browserContent.appendChild(err);
+    browserRefs.hidden = true;
+    return;
+  }
+  if (res.title) {
+    const h = document.createElement('h2');
+    h.className = 'browser-page-title';
+    h.textContent = res.title;
+    browserContent.appendChild(h);
+  }
+  const meta = document.createElement('div');
+  meta.className = 'browser-meta';
+  meta.textContent = `${res.url} · ${res.bytes || 0} bytes` + (res.lang ? ` · ${res.lang}` : '');
+  browserContent.appendChild(meta);
+  const pre = document.createElement('pre');
+  pre.className = 'browser-markdown';
+  pre.textContent = res.markdown || '';
+  browserContent.appendChild(pre);
+
+  const refs = res.refs || {};
+  const ids = Object.keys(refs);
+  if (ids.length) {
+    browserRefs.hidden = false;
+    browserRefsList.innerHTML = '';
+    for (const id of ids) {
+      const r = refs[id];
+      const row = document.createElement('div');
+      row.className = 'browser-ref';
+      const label = (r.label || r.alt || r.placeholder || r.href || r.src || '').toString().slice(0, 80);
+      row.innerHTML = `<span class="ref-id">[${r.type} ${id}]</span> <span class="ref-label"></span>`;
+      row.querySelector('.ref-label').textContent = label;
+      if (r.href) {
+        row.addEventListener('click', () => {
+          q('#browser-url').value = r.href;
+          browserForm.dispatchEvent(new Event('submit'));
+        });
+        row.classList.add('clickable');
+      }
+      browserRefsList.appendChild(row);
+    }
+  } else {
+    browserRefs.hidden = true;
+  }
+}
+
+if (browserForm) {
+  browserForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = q('#browser-url').value.trim();
+    if (!url) return;
+    browserContent.innerHTML = `<div class="empty">${t('browser.fetching')}</div>`;
+    browserRefs.hidden = true;
+    try {
+      const res = await api('POST', '/api/browse', { url });
+      renderBrowserContent(res);
+    } catch (err) {
+      renderBrowserContent({ ok: false, error: err.message });
+    }
+  });
+}
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
 (async () => {
+  applyI18n();
   await loadMe();
-  const initial = location.hash.replace('#','') || 'chat';
-  showView(VIEWS.includes(initial) ? initial : 'chat');
+  const initial = location.hash.replace('#','') || 'capabilities';
+  showView(VIEWS.includes(initial) ? initial : 'capabilities');
   loadInbox();  // so badge reflects backlog
 })();
