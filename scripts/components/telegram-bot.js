@@ -107,18 +107,21 @@ function isAllowed(fromId) {
 
 async function handleStart(chat) {
   await reply(chat.id,
-    `Hi! I'm your Geoclaw knowledge-base bot.\n\n` +
-    `Your chat ID: ${chat.id}\n` +
-    `Your workspace: ${workspaceFor(chat.id)}\n\n` +
-    `Commands:\n` +
-    `/workspace [name]   show or switch your workspace\n` +
-    `/workspaces         list all available workspaces\n` +
-    `/recall <query>     search your workspace\n` +
-    `/list               show recent entries\n` +
-    `/forget <id>        delete an entry\n` +
-    `/help               show this message\n\n` +
-    `Send me any text → I save it as a fact.\n` +
-    `Send me a document (PDF, DOCX, XLSX, TXT, MD...) → I ingest it.`);
+    `Hi! I'm your Geoclaw knowledge-base bot.\n` +
+    `שלום! אני בוט בסיס הידע של Geoclaw.\n\n` +
+    `Your chat ID / מזהה הצ'אט שלך: ${chat.id}\n` +
+    `Your workspace / סביבת העבודה שלך: ${workspaceFor(chat.id)}\n\n` +
+    `Commands / פקודות:\n` +
+    `/workspace [name]   switch workspace / החלפת סביבת עבודה\n` +
+    `/workspaces         list workspaces / הצגת כל הסביבות\n` +
+    `/recall <query>     search / חיפוש\n` +
+    `/list               recent entries / רשומות אחרונות\n` +
+    `/forget <id>        delete an entry / מחיקת רשומה\n` +
+    `/help               this message / הודעה זו\n\n` +
+    `Send any text → saved as a fact.\n` +
+    `שלחו טקסט → יישמר כעובדה.\n\n` +
+    `Send a document (PDF/DOCX/XLSX/TXT/MD…) → ingested into the knowledge base.\n` +
+    `שלחו מסמך (PDF/DOCX/XLSX/TXT/MD…) → ייקלט לבסיס הידע.`);
 }
 
 async function handleWorkspace(chat, arg) {
@@ -164,7 +167,7 @@ async function handleForget(chat, id) {
 async function handleText(chat, text) {
   const ws = workspaceFor(chat.id);
   memory.remember(text, { tags: [`telegram:${chat.id}`] }, { workspace: ws });
-  await reply(chat.id, `✓ saved to ${ws}`);
+  await reply(chat.id, `✓ saved to ${ws} / נשמר בסביבה ${ws}`);
 }
 
 async function handleDocument(chat, doc) {

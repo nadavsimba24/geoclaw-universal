@@ -379,7 +379,12 @@ Rules:
 - For complex multi-part goals, call 'spawn_subagent' with a narrower sub-goal.
 - When the goal is complete, call 'finish' with a short summary for the user.
 - If you need user input and are told ask_user is unavailable, make the most reasonable decision and proceed.
-- Keep going until you call 'finish'. Don't give up quietly.`;
+- Keep going until you call 'finish'. Don't give up quietly.
+
+Language policy:
+- Write 'content' fields and the final 'finish' summary in the SAME language the user used in the goal.
+- Hebrew goal → Hebrew narration and summary (עברית). Arabic → Arabic. Etc.
+- Tool arguments stay in the language that makes sense for the tool (e.g. workspace names, commands, URLs stay in their native form).`;
 
 async function runAgent(goal, opts = {}) {
   const workspace = opts.workspace || memory.activeWorkspace();

@@ -24,18 +24,19 @@ const MAX_UPLOAD_BYTES = parseInt(process.env.GEOCLAW_WEB_MAX_BYTES || String(10
 // ── HTML page ─────────────────────────────────────────────────────────────────
 
 const INDEX_HTML = `<!doctype html>
-<html>
+<html dir="auto">
 <head>
 <meta charset="utf-8">
 <title>Geoclaw — Knowledge Base</title>
 <style>
   :root { color-scheme: light dark; }
-  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 32px; max-width: 900px; margin: 0 auto; }
+  body { font-family: -apple-system, "Segoe UI", "Arial Hebrew", "SBL Hebrew", Roboto, sans-serif; margin: 0; padding: 32px; max-width: 900px; margin: 0 auto; }
   h1 { margin-top: 0; }
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
   select, input[type=text], input[type=password], button {
     font-size: 14px; padding: 8px 12px; border: 1px solid #8884; border-radius: 6px;
     background: #fff2; color: inherit;
+    unicode-bidi: plaintext;
   }
   button { cursor: pointer; background: #4c6ef5; color: #fff; border: none; }
   button.secondary { background: #8884; color: inherit; }
@@ -47,8 +48,8 @@ const INDEX_HTML = `<!doctype html>
   .drop.over { border-color: #4c6ef5; background: #4c6ef518; }
   .memlist { margin-top: 24px; }
   .mem { padding: 12px; border: 1px solid #8883; border-radius: 6px; margin-bottom: 8px; }
-  .mem .meta { font-size: 12px; color: #888; margin-bottom: 4px; }
-  .mem pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: inherit; }
+  .mem .meta { font-size: 12px; color: #888; margin-bottom: 4px; unicode-bidi: plaintext; }
+  .mem pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: inherit; unicode-bidi: plaintext; }
   .mem .actions { margin-top: 8px; }
   .mem button { font-size: 12px; padding: 4px 10px; }
   .msg { padding: 10px 14px; border-radius: 6px; margin: 8px 0; }
@@ -60,7 +61,8 @@ const INDEX_HTML = `<!doctype html>
 </head>
 <body>
   <h1>🧠 Geoclaw Knowledge Base</h1>
-  <p style="color:#888">Drag files in to add them, or type a fact below. Everything stays local on this machine.</p>
+  <p style="color:#888">Drag files in to add them, or type a fact below. Everything stays local on this machine.<br>
+  <span style="font-size:13px">גררו קבצים כדי להוסיף אותם, או כתבו עובדה למטה. הכול נשאר מקומי במחשב הזה.</span></p>
 
   <div id="auth" style="display:none">
     <div class="msg err">This instance is protected. Enter the passphrase to continue.</div>
@@ -73,8 +75,8 @@ const INDEX_HTML = `<!doctype html>
   <div id="app" style="display:none">
     <div class="row">
       <label>Workspace:</label>
-      <select id="workspace"></select>
-      <input id="newWs" type="text" placeholder="new workspace name" style="flex:1">
+      <select id="workspace" dir="auto"></select>
+      <input id="newWs" type="text" dir="auto" placeholder="new workspace name / שם סביבה חדש" style="flex:1">
       <button id="createWs" class="secondary">Create</button>
     </div>
 
@@ -86,12 +88,12 @@ const INDEX_HTML = `<!doctype html>
     </div>
 
     <div class="row">
-      <input id="factText" type="text" placeholder="Add a single fact..." style="flex:1">
+      <input id="factText" type="text" dir="auto" placeholder="Add a single fact... / הוסיפו עובדה..." style="flex:1">
       <button id="addFact">Remember</button>
     </div>
 
     <div class="row">
-      <input id="searchQ" type="text" placeholder="Search this workspace..." style="flex:1">
+      <input id="searchQ" type="text" dir="auto" placeholder="Search this workspace... / חיפוש בסביבת העבודה..." style="flex:1">
       <button id="searchBtn" class="secondary">Search</button>
       <button id="listBtn"   class="secondary">List all</button>
     </div>
@@ -189,7 +191,7 @@ function renderMemories(list) {
       const tags = (m.tags || []).join(', ');
       const date = new Date(m.timestamp).toLocaleString();
       div.innerHTML = '<div class="meta">' + m.id + ' · ' + date + (tags ? ' · [' + tags + ']' : '') + (m.score != null ? ' · score ' + m.score.toFixed(2) : '') + '</div>' +
-                      '<pre></pre>' +
+                      '<pre dir="auto"></pre>' +
                       '<div class="actions"><button class="secondary" data-id="' + m.id + '">forget</button></div>';
       div.querySelector('pre').textContent = m.text;
       div.querySelector('button').onclick = async (e) => {

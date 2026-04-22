@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const https = require('https');
+const lang = require('./lang.js');
 
 try {
   require('dotenv').config({
@@ -36,16 +37,45 @@ function safeForPS(text) {
 
 // ── System voices ─────────────────────────────────────────────────────────────
 
+// Voice selection per platform for non-English text.
+// macOS ships Hebrew voice "Carmit" and Arabic "Maged" on most installs.
+function pickMacVoice(langCode) {
+  switch (langCode) {
+    case 'he': return 'Carmit';
+    case 'ar': return 'Maged';
+    case 'ru': return 'Milena';
+    default:   return null;  // use system default
+  }
+}
+function pickEspeakLang(langCode) {
+  // espeak-ng language codes are mostly ISO-639 with some quirks.
+  switch (langCode) {
+    case 'he': return 'he';
+    case 'ar': return 'ar';
+    case 'ru': return 'ru';
+    case 'zh': return 'zh';
+    default:   return null;  // default English
+  }
+}
+
 function speakSystem(text) {
   const platform = process.platform;
+  const langCode = lang.detectLang(text);
+
   if (platform === 'darwin') {
+    const voice = pickMacVoice(langCode);
+    const args = voice ? ['-v', voice, text] : [text];
     return new Promise((resolve, reject) => {
-      const child = spawn('say', [text], { stdio: 'ignore' });
+      const child = spawn('say', args, { stdio: 'ignore' });
       child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`say exited ${code}`)));
       child.on('error', reject);
     });
   }
   if (platform === 'win32') {
+    // Windows SAPI will auto-pick a matching voice IF a Hebrew/Arabic voice
+    // is installed (Settings > Time & Language > Language). If not, it falls
+    // back to the default voice — which will still read the characters, just
+    // with an English accent.
     const ps = `Add-Type -AssemblyName System.Speech; ` +
                `$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; ` +
                `$s.Speak("${safeForPS(text)}")`;
@@ -55,8 +85,7 @@ function speakSystem(text) {
       child.on('error', reject);
     });
   }
-  // Linux / WSL: prefer espeak-ng, then espeak, then festival.
-  // Under WSL, fall back to Windows SAPI — WSL usually has no audio stack.
+  // Linux / WSL: prefer espeak-ng with language flag, then espeak, then festival.
   if (process.env.WSL_DISTRO_NAME || /microsoft/i.test(os.release())) {
     const ps = `Add-Type -AssemblyName System.Speech; ` +
                `$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; ` +
@@ -69,8 +98,10 @@ function speakSystem(text) {
   }
   const bin = has('espeak-ng') ? 'espeak-ng' : (has('espeak') ? 'espeak' : null);
   if (bin) {
+    const espeakLang = pickEspeakLang(langCode);
+    const args = espeakLang ? ['-v', espeakLang, text] : [text];
     return new Promise((resolve, reject) => {
-      const child = spawn(bin, [text], { stdio: 'ignore' });
+      const child = spawn(bin, args, { stdio: 'ignore' });
       child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`${bin} exited ${code}`)));
       child.on('error', reject);
     });
@@ -85,10 +116,10 @@ function speakSystem(text) {
   }
   return Promise.reject(new Error(
     'No system TTS available. Install one of:\n' +
-    '  sudo apt install espeak-ng     # Debian/Ubuntu\n' +
+    '  sudo apt install espeak-ng     # Debian/Ubuntu (supports Hebrew via -v he)\n' +
     '  sudo dnf install espeak-ng     # Fedora\n' +
     '  brew install espeak            # macOS (already has `say`, so you should not need this)\n' +
-    'Or run: geoclaw setup   and enable OpenAI TTS instead.'
+    'Or run: geoclaw setup   and enable OpenAI TTS instead (best multilingual quality).'
   ));
 }
 

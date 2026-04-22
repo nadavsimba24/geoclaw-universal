@@ -398,6 +398,71 @@ includes it. Add it to `GEOCLAW_TELEGRAM_ALLOWED_IDS` and restart.
 
 ---
 
+## 10a. Hebrew, Arabic, and other languages (תמיכה בעברית)
+
+Geoclaw treats text as UTF-8 bytes end-to-end. Hebrew, Arabic, Russian, Chinese,
+Japanese, and mixed-script text all work with no configuration — you can
+`remember`, `recall`, ingest documents, chat, and run the agent in any
+language supported by your configured LLM provider.
+
+**Language policy the assistant follows**
+
+- Chat and agent replies are produced in the same language as your message.
+  Hebrew in → Hebrew out. English in → English out.
+- CLI commands, file paths, and product names (`geoclaw agent`, `Monday.com`,
+  etc.) stay in their original form — they are not translated.
+
+**Right-to-left rendering**
+
+- **Terminal** — modern terminals (Windows Terminal, iTerm2, gnome-terminal,
+  WSL default) render Hebrew/Arabic correctly out of the box. If characters
+  look reversed, the terminal is the problem, not the data — the bytes on
+  disk are fine.
+- **Web UI** (`geoclaw upload`) — the page uses `dir="auto"` on every input
+  and memory block, so each piece of content flips direction based on its
+  own script. You can have English facts and Hebrew facts in the same list.
+- **Telegram bot** — Telegram clients handle BiDi natively.
+
+**Search and recall in Hebrew**
+
+The keyword index includes Hebrew stopwords (`של`, `את`, `לא`, `זה`, …) so
+queries like "של" don't flood you with every document that contains the word.
+Longer Hebrew queries (`חופשה`, `משרד`, `תקציב`) score the same way
+English ones do.
+
+**Voice (TTS) in Hebrew**
+
+- **macOS** — `geoclaw say "שלום"` uses the Carmit voice if installed.
+  If you don't hear anything, add it:
+  **System Settings → Accessibility → Spoken Content → System Voice →
+  Customise → Hebrew → Carmit**.
+- **Linux** — install `espeak-ng` (`sudo apt install espeak-ng`). Geoclaw
+  passes `-v he` for Hebrew automatically.
+- **Windows / WSL** — Windows SAPI uses whichever Hebrew voice you've
+  installed via **Settings → Time & Language → Language → Add a language →
+  Hebrew**. Without one, SAPI will read the characters with an English
+  accent.
+- **Best multilingual quality** — enable OpenAI TTS:
+  `GEOCLAW_TTS_PROVIDER=openai` and set `GEOCLAW_TTS_OPENAI_KEY`. OpenAI
+  TTS speaks Hebrew, Arabic, Russian, and 50+ other languages with natural
+  prosody.
+
+**A note on "the text looks backwards"**
+
+If Hebrew ever looks mirrored or out of order, check the **viewer**, not
+the data:
+- Is the terminal emulator modern and BiDi-aware? Try Windows Terminal or
+  iTerm2.
+- Is the font installed? Hebrew needs a font with Hebrew glyphs (most
+  system fonts have them).
+- If you copy-paste Hebrew from a log file into another app, the other app
+  handles direction — the file itself is fine.
+
+Geoclaw never reverses strings internally. The bytes you save are the bytes
+you get back.
+
+---
+
 ## 11. Business-deployment patterns
 
 These are the shapes that work well for regulated / multi-department use.

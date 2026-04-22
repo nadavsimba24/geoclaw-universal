@@ -224,11 +224,19 @@ function list(filter = {}, opts = {}) {
 // ── Relevance scoring (token-overlap + substring, no embeddings) ──────────────
 
 const STOPWORDS = new Set([
+  // English
   'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'any', 'can', 'had',
   'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how',
   'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its',
   'let', 'put', 'say', 'she', 'too', 'use', 'that', 'with', 'have', 'this',
   'from', 'they', 'will', 'your', 'what', 'when', 'there', 'which', 'their',
+  // Hebrew — high-frequency standalone words. Prefix letters (ה, ו, ש, ב, כ, ל, מ)
+  // attach to following words in Hebrew so they rarely appear as standalone tokens.
+  'של', 'את', 'לא', 'זה', 'זו', 'זאת', 'הוא', 'היא', 'הם', 'הן', 'אני', 'אתה',
+  'את', 'אתם', 'אתן', 'אנחנו', 'אנו', 'על', 'עם', 'גם', 'כי', 'אם', 'או', 'עד',
+  'יש', 'אין', 'היה', 'היתה', 'היו', 'יהיה', 'יהיו', 'היות', 'להיות', 'כן', 'כך',
+  'אל', 'אלה', 'אלו', 'מה', 'איך', 'איפה', 'מתי', 'למה', 'כמו', 'רק', 'בין',
+  'כל', 'כבר', 'עוד', 'ולא', 'אבל', 'אפשר', 'צריך', 'אחרי', 'לפני', 'תחת',
 ]);
 
 function tokenize(s) {
