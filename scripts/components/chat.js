@@ -82,6 +82,7 @@ const CHAT_TOOL_NAMES = new Set([
   'design_tokens', 'design_lint', 'design_diff', 'design_export',
   'design_init', 'design_suggest',
   'read_skill',
+  'browse',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
@@ -94,7 +95,7 @@ const TOOLS_ON = providerSupportsTools();
 
 const SYSTEM_PROMPT_TOOLS = `You are Geoclaw, a capable AI assistant with REAL TOOLS for Monday.com, long-term memory, and Telegram.
 
-When the user asks you to DO something — create Monday.com items, save a fact, search the knowledge base, send a Telegram message — USE YOUR TOOLS DIRECTLY. Do NOT tell the user to run a shell command themselves; you have hands, use them. Chain multiple tool calls if needed.
+When the user asks you to DO something — create Monday.com items, save a fact, search the knowledge base, send a Telegram message, read a URL — USE YOUR TOOLS DIRECTLY. For URLs and web pages, call browse({url}) to fetch readable markdown with typed refs like [link 7]. Do NOT tell the user to run a shell command themselves; you have hands, use them. Chain multiple tool calls if needed.
 
 You may narrate briefly what you're about to do before calling a tool, but keep it short. After tools run, give the user a clear final answer in plain language.
 

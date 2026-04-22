@@ -342,12 +342,13 @@ const CHAT_TOOL_NAMES = new Set([
   'send_telegram',
   'design_tokens', 'design_lint', 'design_diff', 'design_export', 'design_init', 'design_suggest',
   'read_skill',
+  'browse',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
 const SYSTEM_PROMPT = `You are Geoclaw, a capable assistant with real tools for Monday.com, long-term memory, Telegram, and a design-system toolkit (DESIGN.md — colors, typography, components).
 
-When the user asks you to DO something — create Monday items, remember/recall, send Telegram, generate on-brand UI — USE YOUR TOOLS. Don't tell them to run a shell command.
+When the user asks you to DO something — create Monday items, remember/recall, send Telegram, generate on-brand UI, read a URL — USE YOUR TOOLS. Don't tell them to run a shell command. For URLs and web pages, call browse({url}) to fetch readable markdown with typed refs like [link 7].
 
 When a user asks you to design or build UI (dashboard, app, landing page, form), first check for DESIGN.md via design_tokens; if none exists, scaffold one with design_init (pick a template that fits the domain), then design_suggest your components using those tokens.
 
@@ -612,6 +613,19 @@ async function handle(req, res) {
   if (req.method === 'POST' && pathname === '/api/inbox/clear') {
     saveJSON(INBOX_FILE, []);
     return sendJSON(res, 200, { ok: true });
+  }
+
+  // ── /api/browse ──────────────────────────────────────────────────────────
+  if (req.method === 'POST' && pathname === '/api/browse') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.url) return sendJSON(res, 400, { ok: false, error: 'missing url' });
+    try {
+      const { browse } = require('./browse.js');
+      const r = await browse(body.url, { maxChars: body.maxChars });
+      return sendJSON(res, r.ok ? 200 : 502, r);
+    } catch (e) {
+      return sendJSON(res, 500, { ok: false, error: e.message });
+    }
   }
 
   // ── /api/skills ──────────────────────────────────────────────────────────

@@ -262,6 +262,25 @@ const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'browse',
+      description:
+        'Fetch a web page and return readable markdown with typed refs (`[link 7]`, `[button 9]`, `[input text 12]`, `[image 11]`). ' +
+        'Each ref is backed by a map (href/name/placeholder/alt) so you can quote or describe specific elements to the user. ' +
+        'Use this to answer questions about a URL, summarize an article, check prices, or look up documentation. ' +
+        'Returns `{ok, url, title, markdown, refs, bytes, lang}`. Pure fetch — does not execute JavaScript.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'Absolute http(s) URL to fetch.' },
+          maxChars: { type: 'integer', description: 'Optional cap on returned markdown length (default 20000).' },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'finish',
       description: 'Declare the goal complete with a short summary for the user.',
       parameters: {
@@ -387,6 +406,12 @@ async function callTool(name, args, ctx) {
         }
         const reply = await askUser(args.question, ctx.rl);
         return { ok: true, answer: reply };
+      }
+      case 'browse': {
+        const { browse } = require('./browse.js');
+        const res = await browse(args.url, { maxChars: args.maxChars });
+        if (!res.ok) return { ok: false, error: res.error || 'browse failed' };
+        return res;
       }
       case 'read_skill': {
         const body = skills.readSkillBody(args.name);
@@ -531,6 +556,7 @@ Rules:
 - Before answering factual questions, call 'recall' to check your workspace knowledge.
 - When you learn something reusable, call 'remember' to save it.
 - For complex multi-part goals, call 'spawn_subagent' with a narrower sub-goal.
+- To read a URL, summarize an article, check a page, or verify documentation, call 'browse({url})'. Returns markdown with numbered refs like [link 7] you can cite.
 - When the goal is complete, call 'finish' with a short summary for the user.
 - If you need user input and are told ask_user is unavailable, make the most reasonable decision and proceed.
 - Keep going until you call 'finish'. Don't give up quietly.

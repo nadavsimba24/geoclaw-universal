@@ -76,6 +76,7 @@ Commands:
   say <text>      Speak text out loud (text-to-speech)
   memory          Manage the knowledge base (list, forget, stats, export, clear)
   skills          Manage SKILL.md skills (list, add, bundles, create — from skills-il)
+  browse <url>    Fetch a web page and extract readable markdown + typed refs
   workspace       Manage workspaces (list, create, use, current, delete)
   start           Start Geoclaw agent platform
   setup           Interactive setup wizard
@@ -429,6 +430,15 @@ async function main() {
     case 'skills':
     case 'skill':
       await runScript('components/skills.js', args.slice(1));
+      break;
+
+    case 'browse':
+    case 'fetch':
+      if (args.length < 2) {
+        console.log('Usage: geoclaw browse <url> [--format markdown|text|json] [--max N] [--refs]');
+        break;
+      }
+      await runScript('components/browse.js', args.slice(1));
       break;
 
     case 'chat':
