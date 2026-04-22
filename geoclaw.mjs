@@ -273,35 +273,39 @@ async function runDoctor() {
 }
 
 // ── Update command (pure Node.js — works on all platforms) ──────────────────
+// Geoclaw is distributed via GitHub, not npm, so update pulls the latest
+// main-branch tarball from github.com/nadavsimba24/geoclaw-universal.
 
 async function runUpdate() {
   const PACKAGE = 'geoclaw-universal';
+  const REPO    = 'nadavsimba24/geoclaw-universal';
+  const TARBALL = `https://github.com/${REPO}/tarball/main`;
 
+  // Read local version from package.json so we have something to show.
   console.log('🔍 Checking current version...');
   let currentVersion = 'unknown';
   try {
-    const raw = execSync(`npm list -g --depth=0 --json`, { encoding: 'utf8', timeout: 15000 });
-    const parsed = JSON.parse(raw);
-    currentVersion = parsed?.dependencies?.[PACKAGE]?.version ?? 'unknown';
+    const pkgJson = JSON.parse(execSync('npm list -g --depth=0 --json', { encoding: 'utf8', timeout: 15000 }));
+    currentVersion = pkgJson?.dependencies?.[PACKAGE]?.version ?? 'unknown';
   } catch {}
   console.log(`   Installed : v${currentVersion}`);
 
-  console.log('🌐 Checking latest version on npm...');
-  let latestVersion;
+  // Find out what's on main — we just look at the latest commit SHA as a fingerprint.
+  console.log('🌐 Fetching latest commit from GitHub...');
+  let latestSha = 'main';
   try {
-    latestVersion = execSync(`npm view ${PACKAGE} version`, { encoding: 'utf8', timeout: 15000 }).trim();
+    const apiUrl = `https://api.github.com/repos/${REPO}/commits/main`;
+    const res = await fetch(apiUrl, { headers: { 'User-Agent': 'geoclaw-update' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.sha) latestSha = data.sha.slice(0, 7);
+    }
   } catch {
-    console.error('❌ Could not reach npm registry. Check your internet connection.');
-    process.exit(1);
+    console.warn('   (could not reach GitHub API — proceeding with tarball install anyway)');
   }
-  console.log(`   Latest    : v${latestVersion}`);
+  console.log(`   Latest    : main@${latestSha}`);
 
-  if (currentVersion === latestVersion) {
-    console.log(`\n✅ Already up to date (v${latestVersion})`);
-    return;
-  }
-
-  // Backup .env
+  // Backup .env before the npm install replaces the install directory.
   const envFile = join(__dirname, '.env');
   let envBackup = null;
   if (existsSync(envFile)) {
@@ -311,20 +315,19 @@ async function runUpdate() {
     console.log(`\n💾 Config backed up → ${envBackup}`);
   }
 
-  // Run the update
-  console.log(`\n📦 Updating ${PACKAGE} v${currentVersion} → v${latestVersion}...`);
+  console.log(`\n📦 Installing from ${TARBALL}...`);
   try {
-    execSync(`npm install -g ${PACKAGE}@${latestVersion}`, { stdio: 'inherit', timeout: 120000 });
+    execSync(`npm install -g ${TARBALL}`, { stdio: 'inherit', timeout: 180000 });
   } catch {
     console.error('\n❌ npm install failed.');
     if (envBackup) console.log(`   Your config backup is safe at: ${envBackup}`);
     process.exit(1);
   }
 
-  // Restore .env into newly installed location
+  // Restore .env into the newly installed location.
   if (envBackup) {
     try {
-      const newInstallDir = execSync(`npm root -g`, { encoding: 'utf8' }).trim();
+      const newInstallDir = execSync('npm root -g', { encoding: 'utf8' }).trim();
       const newEnvPath = join(newInstallDir, PACKAGE, '.env');
       if (existsSync(dirname(newEnvPath))) {
         copyFileSync(envBackup, newEnvPath);
@@ -337,7 +340,7 @@ async function runUpdate() {
 
   console.log(`
 ────────────────────────────────────────────
-✅ Geoclaw updated to v${latestVersion}
+✅ Geoclaw updated to main@${latestSha}
 
    geoclaw start   → launch the platform
    geoclaw status  → verify all components
