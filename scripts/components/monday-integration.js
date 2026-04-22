@@ -2,13 +2,14 @@
 // Real Monday.com GraphQL integration for Geoclaw
 
 const https = require('https');
+const { env } = require('./env.js');
 
 const MONDAY_ENDPOINT = 'https://api.monday.com/v2';
 
 // ── Low-level GraphQL call ────────────────────────────────────────────────────
 
 function mondayRequest(query, variables = {}) {
-  const token = process.env.GEOCLAW_MONDAY_API_TOKEN;
+  const token = env('GEOCLAW_MONDAY_API_TOKEN');
   if (!token) {
     return Promise.reject(new Error(
       'GEOCLAW_MONDAY_API_TOKEN is not set. Run: geoclaw setup'

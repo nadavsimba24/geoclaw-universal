@@ -15,11 +15,12 @@ try {
 
 const memory = require('./memory.js');
 const tts    = require('./tts.js');
+const { env } = require('./env.js');
 
-const PROVIDER = (process.env.GEOCLAW_MODEL_PROVIDER || 'deepseek').toLowerCase();
-const MODEL    = process.env.GEOCLAW_MODEL_NAME || 'deepseek-chat';
-const API_KEY  = process.env.GEOCLAW_MODEL_API_KEY || '';
-const BASE_URL = process.env.GEOCLAW_MODEL_BASE_URL || '';
+const PROVIDER = env('GEOCLAW_MODEL_PROVIDER', 'deepseek').toLowerCase();
+const MODEL    = env('GEOCLAW_MODEL_NAME', 'deepseek-chat');
+const API_KEY  = env('GEOCLAW_MODEL_API_KEY');
+const BASE_URL = env('GEOCLAW_MODEL_BASE_URL');
 
 const SYSTEM_PROMPT = `You are Geoclaw, a friendly and capable AI assistant.
 You have access to integrations the user has enabled: Monday.com, n8n, Telegram, MCP tools, memory, and more.

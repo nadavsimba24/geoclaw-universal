@@ -15,11 +15,12 @@ try {
 
 const memory = require('./memory.js');
 const tts    = require('./tts.js');
+const { env } = require('./env.js');
 
-const PROVIDER = (process.env.GEOCLAW_MODEL_PROVIDER || 'deepseek').toLowerCase();
-const MODEL    = process.env.GEOCLAW_MODEL_NAME || 'deepseek-chat';
-const API_KEY  = process.env.GEOCLAW_MODEL_API_KEY || '';
-const BASE_URL = process.env.GEOCLAW_MODEL_BASE_URL || '';
+const PROVIDER = env('GEOCLAW_MODEL_PROVIDER', 'deepseek').toLowerCase();
+const MODEL    = env('GEOCLAW_MODEL_NAME', 'deepseek-chat');
+const API_KEY  = env('GEOCLAW_MODEL_API_KEY');
+const BASE_URL = env('GEOCLAW_MODEL_BASE_URL');
 const MAX_STEPS = parseInt(process.env.GEOCLAW_AGENT_MAX_STEPS || '12', 10);
 const TOOL_TIMEOUT_MS = parseInt(process.env.GEOCLAW_TOOL_TIMEOUT_MS || '30000', 10);
 const LLM_TIMEOUT_MS  = parseInt(process.env.GEOCLAW_LLM_TIMEOUT_MS  || '60000', 10);
@@ -166,10 +167,10 @@ const toolDefinitions = [
 // ── Tool-availability checks (fail fast, clear message) ───────────────────────
 
 function preflight(name) {
-  if (name === 'send_telegram' && !process.env.GEOCLAW_TELEGRAM_BOT_TOKEN) {
+  if (name === 'send_telegram' && !env('GEOCLAW_TELEGRAM_BOT_TOKEN')) {
     return { ok: false, error: 'send_telegram unavailable: GEOCLAW_TELEGRAM_BOT_TOKEN not set.' };
   }
-  if (name.startsWith('monday_') && !process.env.GEOCLAW_MONDAY_API_TOKEN) {
+  if (name.startsWith('monday_') && !env('GEOCLAW_MONDAY_API_TOKEN')) {
     return { ok: false, error: 'Monday tools unavailable: GEOCLAW_MONDAY_API_TOKEN not set.' };
   }
   return { ok: true };
@@ -232,7 +233,7 @@ async function callTool(name, args, ctx) {
         return { ok: true, item };
       }
       case 'send_telegram': {
-        const token = process.env.GEOCLAW_TELEGRAM_BOT_TOKEN;
+        const token = env('GEOCLAW_TELEGRAM_BOT_TOKEN');
         const data = await postJSON(
           `https://api.telegram.org/bot${token}/sendMessage`,
           {},

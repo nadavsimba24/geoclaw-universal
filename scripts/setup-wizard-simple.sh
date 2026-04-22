@@ -61,14 +61,30 @@ ask_yes_no() {
   done
 }
 
-# Strip carriage returns, newlines, and surrounding whitespace (handles Windows paste)
+# Strip carriage returns, newlines, tabs, and surrounding whitespace.
+# Uses printf|tr|sed instead of bash pattern expansion, because the previous
+# ${s##[[:space:]]*} / ${s%%[[:space:]]*} idioms used glob semantics (where
+# `*` means "any chars", not "zero or more whitespace") and blew away whole
+# values on any input with stray whitespace. Now we also reject any bytes
+# outside printable ASCII so a bad paste can't inject control chars into
+# HTTP Authorization headers.
 _clean() {
   local s="$1"
-  s="${s//$'\r'/}"
-  s="${s//$'\n'/}"
-  s="${s##[[:space:]]*}"
-  s="${s%%[[:space:]]*}"
-  echo "$s"
+  # Remove all CR, LF, NUL, and TAB chars from anywhere in the string.
+  s=$(printf '%s' "$s" | tr -d '\r\n\t\0')
+  # Trim leading and trailing whitespace (portable sed form, not bash glob).
+  s=$(printf '%s' "$s" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
+  printf '%s' "$s"
+}
+
+# Validate that a value is safe to use in an HTTP header (printable ASCII only).
+# Returns 0 if OK, 1 if the value contains characters that would break
+# Node's http header validator (codes < 0x20 or > 0x7E except tab).
+_is_header_safe() {
+  local s="$1"
+  # LC_ALL=C guarantees single-byte matching regardless of locale.
+  LC_ALL=C printf '%s' "$s" | LC_ALL=C grep -qP '[^\x20-\x7E]' && return 1
+  return 0
 }
 
 ask_input() {
@@ -89,18 +105,41 @@ ask_secret() {
 
 # Set or update an env variable. No sed involved — write a fresh file from scratch,
 # which is bulletproof against special characters in the value.
+#
+# We only keep lines that are comments, blank, or recognizable KEY=... assignments.
+# "Loose" text lines from an earlier broken setup (e.g. a raw secret sitting on
+# its own line because _clean wiped the real assignment) get dropped here, so a
+# second run of setup always produces a clean file.
 set_env() {
   local var="$1"
   local value="$2"
+
+  # Defensive: strip any CR/LF/TAB that sneaked past _clean, then refuse to
+  # write a value that would produce an invalid HTTP header later.
+  value=$(printf '%s' "$value" | tr -d '\r\n\t\0')
+  if ! _is_header_safe "$value"; then
+    print_warning "$var contains non-printable characters — refusing to save. Re-enter it without special chars."
+    return 1
+  fi
+
   local tmp
   tmp=$(mktemp)
 
-  # Keep every line EXCEPT an existing assignment of $var
   if [[ -f "$ENV_FILE" ]]; then
-    grep -v "^${var}=" "$ENV_FILE" > "$tmp" 2>/dev/null || true
+    # Keep: comments, blank lines, and KEY=... assignments (for any var except the one we're setting).
+    # Drop: loose text lines (e.g. stray secrets pasted without a key=) so they can't pollute the file.
+    awk -v var="$var" '
+      /^[[:space:]]*#/      { print; next }            # comment
+      /^[[:space:]]*$/      { print; next }            # blank
+      /^[A-Za-z_][A-Za-z0-9_]*=/ {
+        if ($0 !~ "^" var "=") print                   # other assignment
+        next
+      }
+      { next }                                         # everything else: drop
+    ' "$ENV_FILE" > "$tmp"
   fi
 
-  # Append the new assignment (double-quoted, with any " in value escaped)
+  # Append the new assignment (double-quoted, with any " in value escaped).
   local escaped="${value//\"/\\\"}"
   printf '%s="%s"\n' "$var" "$escaped" >> "$tmp"
 

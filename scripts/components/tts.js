@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const https = require('https');
 const lang = require('./lang.js');
+const { env } = require('./env.js');
 
 try {
   require('dotenv').config({
@@ -14,11 +15,11 @@ try {
   });
 } catch {}
 
-const PROVIDER  = (process.env.GEOCLAW_TTS_PROVIDER || 'system').toLowerCase();
-const OPENAI_KEY = process.env.GEOCLAW_TTS_OPENAI_KEY || process.env.OPENAI_API_KEY ||
-                   (process.env.GEOCLAW_MODEL_PROVIDER === 'openai' ? process.env.GEOCLAW_MODEL_API_KEY : '') || '';
-const OPENAI_MODEL = process.env.GEOCLAW_TTS_MODEL || 'tts-1';
-const OPENAI_VOICE = process.env.GEOCLAW_TTS_VOICE || 'alloy';
+const PROVIDER  = env('GEOCLAW_TTS_PROVIDER', 'system').toLowerCase();
+const OPENAI_KEY = env('GEOCLAW_TTS_OPENAI_KEY') || env('OPENAI_API_KEY') ||
+                   (env('GEOCLAW_MODEL_PROVIDER') === 'openai' ? env('GEOCLAW_MODEL_API_KEY') : '');
+const OPENAI_MODEL = env('GEOCLAW_TTS_MODEL', 'tts-1');
+const OPENAI_VOICE = env('GEOCLAW_TTS_VOICE', 'alloy');
 
 // ── Tiny helpers ──────────────────────────────────────────────────────────────
 

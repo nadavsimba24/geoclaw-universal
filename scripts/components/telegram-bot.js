@@ -14,12 +14,13 @@ try {
 
 const memory = require('./memory.js');
 const { ingest } = require('./ingest.js');
+const { env } = require('./env.js');
 
-const BOT_TOKEN = process.env.GEOCLAW_TELEGRAM_BOT_TOKEN || '';
-const ALLOWED = (process.env.GEOCLAW_TELEGRAM_ALLOWED_IDS || '')
+const BOT_TOKEN = env('GEOCLAW_TELEGRAM_BOT_TOKEN');
+const ALLOWED = env('GEOCLAW_TELEGRAM_ALLOWED_IDS')
   .split(',').map(s => s.trim()).filter(Boolean);
-const DEFAULT_WS = process.env.GEOCLAW_TELEGRAM_DEFAULT_WS || 'telegram';
-const MAX_FILE_BYTES = parseInt(process.env.GEOCLAW_TELEGRAM_MAX_BYTES || String(20 * 1024 * 1024), 10);
+const DEFAULT_WS = env('GEOCLAW_TELEGRAM_DEFAULT_WS', 'telegram');
+const MAX_FILE_BYTES = parseInt(env('GEOCLAW_TELEGRAM_MAX_BYTES') || String(20 * 1024 * 1024), 10);
 
 if (!BOT_TOKEN) {
   console.error('❌ GEOCLAW_TELEGRAM_BOT_TOKEN not set. Run: geoclaw setup (and enable Telegram).');
