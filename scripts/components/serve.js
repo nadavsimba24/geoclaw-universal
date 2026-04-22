@@ -291,8 +291,8 @@ function chatEndpoint() {
 
 function llmCall(messages, { tools, stream } = {}) {
   const endpoint = chatEndpoint();
-  if (!endpoint) return Promise.reject(new Error(`provider "${PROVIDER}" has no OpenAI-compatible endpoint`));
-  if (!API_KEY) return Promise.reject(new Error('GEOCLAW_MODEL_API_KEY not set'));
+  if (!endpoint) throw new Error(`provider "${PROVIDER}" has no OpenAI-compatible endpoint`);
+  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY not set — run `geoclaw setup` or export GEOCLAW_MODEL_API_KEY');
 
   const body = { model: MODEL, messages };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
@@ -369,6 +369,10 @@ async function handleChatSSE(req, res, body) {
   req.on('close', () => done());
 
   try {
+    if (!API_KEY) {
+      send('error', { message: 'No API key set. Run `geoclaw setup` (or set GEOCLAW_MODEL_API_KEY) and restart the server.', code: 'no-key' });
+      return done();
+    }
     const { messages: clientMessages = [] } = body;
     const messages = [{ role: 'system', content: buildSystemPrompt() }, ...clientMessages];
 
