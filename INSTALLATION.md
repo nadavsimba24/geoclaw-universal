@@ -1,228 +1,443 @@
-# Geoclaw v3.0 - Installation Guide
+# Geoclaw — Installation & Capabilities Guide
 
-## 🎯 Simple Installation for All Platforms
+Geoclaw is a **Universal Agent Platform** you install once and use on the
+terminal. It gives you a chat interface to any major LLM, a workspace-scoped
+knowledge base, document ingestion (RAG), and an autonomous tool-calling agent
+that can spawn subagents for complex goals.
 
-### **Option 1: Direct npm install (Recommended)**
+This guide takes you from zero to a working install, then walks through every
+capability in the order you're most likely to use them.
+
+---
+
+## 1. Requirements
+
+| Requirement | Version | Why |
+|---|---|---|
+| Node.js     | ≥ 18    | Runtime |
+| npm         | ≥ 8     | Install |
+| OS          | macOS / Linux / Windows / WSL2 | Cross-platform |
+| Git         | any recent | For the `npm install` from GitHub |
+
+Optional, activated on first use:
+
+| Optional dep | Activates | Install command |
+|---|---|---|
+| `pdf-parse`  | `.pdf` ingestion    | `npm install -g pdf-parse` |
+| `mammoth`    | `.docx` ingestion   | `npm install -g mammoth` |
+| `xlsx`       | `.xlsx` ingestion   | `npm install -g xlsx` |
+
+---
+
+## 2. Install
+
+### One-line install (recommended, all platforms)
+
 ```bash
-# Linux/macOS/WSL
-npm install -g "https://github.com/nadavsimba24/geoclaw-universal.git"
-
-# Windows (PowerShell)
 npm install -g "https://github.com/nadavsimba24/geoclaw-universal.git"
 ```
 
-### **Option 2: Using install scripts**
-```bash
-# Linux/macOS/WSL
-curl -fsSL https://raw.githubusercontent.com/nadavsimba24/geoclaw-universal/main/install.sh | bash
+### Windows (PowerShell, run as Administrator if you hit permission errors)
 
-# Windows (PowerShell)
-# Run as Administrator in PowerShell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-.\install-windows.ps1
+```powershell
+npm install -g "https://github.com/nadavsimba24/geoclaw-universal.git"
 ```
 
-### **Option 3: Clone and install**
+### From a local clone (contributors / air-gapped environments)
+
 ```bash
-# All platforms
 git clone https://github.com/nadavsimba24/geoclaw-universal.git
 cd geoclaw-universal
 npm install
-npm link  # Makes 'geoclaw' command available globally
+npm link   # makes `geoclaw` available globally
 ```
 
-## 🔧 Platform-Specific Instructions
+### Verify
 
-### **Windows**
-1. **Install Node.js** from https://nodejs.org/
-2. **Open PowerShell as Administrator**
-3. **Run installation**:
-   ```powershell
-   npm install -g "https://github.com/nadavsimba24/geoclaw-universal.git"
-   ```
-4. **If you get permission errors**, run PowerShell as Administrator
-
-### **WSL (Windows Subsystem for Linux)**
-1. **Open WSL terminal**
-2. **Install Node.js** if not already installed:
-   ```bash
-   sudo apt update
-   sudo apt install nodejs npm
-   ```
-3. **Run installation**:
-   ```bash
-   npm install -g "https://github.com/nadavsimba24/geoclaw-universal.git"
-   ```
-
-### **macOS**
-1. **Install Node.js** from https://nodejs.org/ or using Homebrew:
-   ```bash
-   brew install node
-   ```
-2. **Run installation**:
-   ```bash
-   npm install -g "https://github.com/nadavsimba24/geoclaw-universal.git"
-   ```
-
-### **Linux**
-1. **Install Node.js**:
-   ```bash
-   # Ubuntu/Debian
-   sudo apt update
-   sudo apt install nodejs npm
-   
-   # Fedora
-   sudo dnf install nodejs npm
-   ```
-2. **Run installation**:
-   ```bash
-   npm install -g "https://github.com/nadavsimba24/geoclaw-universal.git"
-   ```
-
-## 🚀 After Installation
-
-### **Verify Installation**
 ```bash
-# Check if geoclaw command is available
 geoclaw --help
-
-# Should show:
-# 🎭  Geoclaw v3.0 - Universal Agent Platform
-# ────────────────────────────────────────────
-# Transparent automation with educational UX
 ```
 
-### **Setup Geoclaw**
+You should see the command list including `chat`, `agent`, `remember`,
+`recall`, `ingest`, `workspace`, `memory`.
+
+---
+
+## 3. First-time setup
+
 ```bash
-# Run interactive setup wizard
 geoclaw setup
-
-# This will guide you through configuring:
-# 1. Memory System
-# 2. Skill Ecosystem
-# 3. Vibe Kanban
-# 4. n8n workflow automation
-# 5. QGIS/PostGIS geospatial tools
-# 6. Web scraping
-# 7. MCPorter integration
-# 8. Workflow orchestration
 ```
 
-### **Start Geoclaw**
+The wizard is a 10-section interactive flow. The two sections you **must**
+complete to use the new capabilities:
+
+1. **LLM Model** — pick a provider and paste an API key. Any OpenAI-compatible
+   provider works for the agent (DeepSeek, OpenAI, custom). Chat also works
+   with Anthropic, Google, and Ollama.
+2. **Memory / Knowledge base** — confirms `~/.geoclaw/` is writable.
+
+The other sections (Monday.com, Telegram, n8n, MCP, QGIS, etc.) are optional —
+enable whatever you'll actually use.
+
+Everything the wizard collects is stored in a `.env` file in the install
+directory. You can re-run `geoclaw setup` any time to change it.
+
+---
+
+## 4. Core commands at a glance
+
+| Command | What it does |
+|---|---|
+| `geoclaw chat`                  | Interactive LLM chat with knowledge-base context |
+| `geoclaw chat "one-shot"`       | Single Q&A, prints the reply and exits |
+| `geoclaw agent "<goal>"`        | Autonomous agent — plans, calls tools, finishes |
+| `geoclaw remember "<text>"`     | Save a fact to the active workspace |
+| `geoclaw recall "<query>"`      | Relevance-ranked search over the knowledge base |
+| `geoclaw ingest <file>`         | Chunk a document into searchable memories (RAG) |
+| `geoclaw workspace <sub>`       | Manage workspaces (list/create/use/delete) |
+| `geoclaw memory <sub>`          | list / forget / stats / export / clear |
+| `geoclaw monday <sub>`          | Monday.com boards, items, updates |
+| `geoclaw mcp <sub>`             | MCP server discovery & calls |
+| `geoclaw setup`                 | Re-run the setup wizard |
+| `geoclaw doctor`                | Diagnose install issues |
+
+---
+
+## 5. Chat — talk to your configured LLM
+
 ```bash
-# Start the platform
-geoclaw start
+geoclaw chat
 ```
 
-## 🛠️ Troubleshooting
+What you get:
+- A REPL prompt with `Provider`, `Model`, and active `Workspace` shown.
+- Every turn, the top 5 most relevant memories from your active workspace are
+  injected into the system prompt automatically (RAG on your own knowledge).
+- Commands inside the chat: `/exit`, `/clear`, `/system`, `/help`.
 
-### **"npm: command not found"**
-- Install Node.js from https://nodejs.org/
-- Make sure Node.js is in your PATH
+One-shot mode:
 
-### **Permission errors on Linux/macOS**
 ```bash
-# Fix npm permissions
-sudo chown -R $USER /usr/local/lib/node_modules
-# Or install with --no-sudo
+geoclaw chat "what's our retention policy for financial records?"
+```
+
+---
+
+## 6. Knowledge base — remember, recall, ingest
+
+The knowledge base is a local JSON store at
+`~/.geoclaw/workspaces/<workspace>/memory.json`. It survives reinstalls. All
+writes are atomic and protected by a file lock — safe for concurrent use.
+
+### Remember a fact
+
+```bash
+geoclaw remember "Anna is the compliance lead; escalate GDPR questions to her"
+```
+
+### Search by relevance
+
+```bash
+geoclaw recall "who handles GDPR?"
+```
+
+Scoring is token-overlap + substring match (no embeddings, no network calls).
+Works well up to a few thousand entries.
+
+### Ingest a document
+
+```bash
+geoclaw ingest policy.pdf
+geoclaw ingest notes.md --tag work
+geoclaw ingest data.xlsx --tag accounting --replace
+```
+
+Supported formats: `.txt`, `.md`, `.pdf`, `.docx`, `.xlsx`, `.csv`, `.json`,
+`.html`, `.log`. PDF/DOCX/XLSX require the optional packages listed in §1.
+
+Documents are chunked at paragraph boundaries (≈800 chars, 100-char overlap).
+Each chunk is tagged with `file:<basename>` and `chunk:N/total`.
+
+**Re-ingesting** the same file is a no-op unless the content changed —
+content-hash dedup is on by default. Use `--replace` to force a refresh.
+
+### Drop all chunks from a source
+
+```bash
+geoclaw ingest --remove old-policy.pdf
+```
+
+### Other knowledge-base ops
+
+```bash
+geoclaw memory list        # show every memory in the active workspace
+geoclaw memory stats       # counts and storage location
+geoclaw memory export backup.json
+geoclaw forget <memory-id>
+geoclaw memory clear --yes # wipe the active workspace
+```
+
+---
+
+## 7. Workspaces — multi-tenant knowledge
+
+Workspaces keep teams / departments / clients isolated. Each workspace has its
+own memory file; nothing leaks between them.
+
+```bash
+geoclaw workspace list                      # show all, marks the active one
+geoclaw workspace create legal              # make a new workspace
+geoclaw workspace use legal                 # make it sticky (default for all commands)
+geoclaw workspace current                   # print the active workspace name
+geoclaw workspace delete acme-demo --yes    # delete a workspace
+```
+
+Use a workspace just for one command without changing the default:
+
+```bash
+GEOCLAW_WORKSPACE=accounting geoclaw recall "invoice format"
+GEOCLAW_WORKSPACE=legal      geoclaw agent "summarize retention rules"
+```
+
+The `default` workspace is created automatically. Any legacy
+`~/.geoclaw/memory.json` from earlier versions is migrated into `default` on
+first run.
+
+Typical business layout:
+
+```
+~/.geoclaw/workspaces/
+├── default/        general-purpose notes
+├── legal/          contracts, policies, regulations
+├── accounting/     invoices, ledgers, tax guides
+├── ops/            SOPs, runbooks
+└── client-acme/    dedicated per-client KB
+```
+
+---
+
+## 8. Agent — autonomous goal execution
+
+```bash
+geoclaw agent "summarize my Monday.com board 5095065110 and post it to Telegram"
+```
+
+What the agent does:
+
+1. Reads the goal, plans its approach (visible in `content` field).
+2. Calls tools — one or many per turn — to make progress.
+3. Loops until it calls `finish`, hits the step limit, or you stop it.
+
+### Available tools
+
+| Tool | Purpose |
+|---|---|
+| `remember`          | Save to the active workspace |
+| `recall`            | Search the workspace |
+| `spawn_subagent`    | Delegate a sub-task to a child agent |
+| `monday_list_boards`| List Monday.com boards |
+| `monday_get_board`  | Read a board's columns and items |
+| `monday_create_item`| Create an item on a board |
+| `send_telegram`     | Send a chat message |
+| `ask_user`          | Pause and ask (interactive mode only) |
+| `finish`            | Declare the goal complete |
+
+### Subagents (delegation)
+
+A subagent is a child agent with its own goal, inheriting the parent's
+workspace. Use them to decompose work:
+
+> Parent: "Onboard Acme: build a client KB and draft a welcome email."
+>
+> → `spawn_subagent("ingest all contracts in ./acme/ into workspace client-acme")`
+>
+> → `spawn_subagent("draft a welcome email based on recall('onboarding checklist')")`
+
+Nesting is capped (default depth 2) to prevent runaway recursion.
+
+### Safety and reliability
+
+| Setting | Default | What it does |
+|---|---|---|
+| `GEOCLAW_AGENT_MAX_STEPS`    | 12     | Step cap — kills infinite loops |
+| `GEOCLAW_TOOL_TIMEOUT_MS`    | 30 000 | Per-tool timeout |
+| `GEOCLAW_LLM_TIMEOUT_MS`     | 60 000 | LLM request timeout |
+| `GEOCLAW_SUBAGENT_MAX_DEPTH` | 2      | Max subagent nesting |
+
+Transient LLM errors (429, 5xx, connection resets) are retried with
+exponential backoff — up to 3 retries. In non-interactive mode (`ask_user`
+unavailable), the agent is told to make the best decision and proceed
+instead of hanging.
+
+### Provider compatibility
+
+| Provider    | Chat | Agent (tool calls) |
+|---|---|---|
+| DeepSeek    | ✅  | ✅ |
+| OpenAI      | ✅  | ✅ |
+| Anthropic   | ✅  | ❌ (not yet) |
+| Google      | ✅  | ❌ (not yet) |
+| Ollama      | ✅  | ❌ (not yet) |
+| Custom OpenAI-compatible (via `GEOCLAW_MODEL_BASE_URL`) | ✅ | ✅ |
+
+Switch providers any time with `geoclaw setup`.
+
+---
+
+## 9. Business-deployment patterns
+
+These are the shapes that work well for regulated / multi-department use.
+
+### Municipal — one workspace per department
+
+```bash
+geoclaw workspace create parks
+geoclaw workspace create planning
+geoclaw workspace create finance
+GEOCLAW_WORKSPACE=planning geoclaw ingest zoning-ordinance.pdf --tag policy
+GEOCLAW_WORKSPACE=planning geoclaw agent "draft a citizen-facing FAQ on residential setbacks"
+```
+
+### Bank — strict isolation per business line
+
+```bash
+geoclaw workspace create retail
+geoclaw workspace create private-banking
+GEOCLAW_WORKSPACE=retail geoclaw ingest kyc-policy-v3.docx
+GEOCLAW_WORKSPACE=retail geoclaw chat
+you › what's the KYC refresh cadence for retail clients?
+```
+
+### Accounting firm — one workspace per client
+
+```bash
+geoclaw workspace create client-acme
+geoclaw ingest acme-q1-ledger.xlsx --tag q1-2026
+geoclaw ingest acme-tax-letters.pdf
+geoclaw agent "draft a summary of Q1 material variances for the Acme file"
+```
+
+---
+
+## 10. Troubleshooting
+
+### `npm: command not found`
+Install Node.js from https://nodejs.org/.
+
+### Permission errors installing globally (Linux/macOS)
+
+```bash
 npm config set prefix ~/.npm-global
 echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### **Windows PowerShell execution policy**
+### Windows execution policy blocks the install script
+
 ```powershell
-# Run as Administrator
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-### **Git not installed**
-```bash
-# Linux
-sudo apt install git
+### `GEOCLAW_MODEL_API_KEY not set — run: geoclaw setup`
+You haven't completed the Model section of `geoclaw setup`, or you ran the
+command from a shell that didn't load the `.env` file. Re-run `geoclaw setup`.
 
-# macOS
-brew install git
+### `Agent mode requires an OpenAI-compatible provider`
+You're on Anthropic / Google / Ollama, and the agent's tool-calling isn't
+supported there yet. Run `geoclaw setup` and pick DeepSeek or OpenAI.
 
-# Windows: Download from https://git-scm.com/
-```
-
-### **Node.js version too old**
-```bash
-# Check Node.js version
-node --version  # Should be >= 18.0.0
-
-# Update Node.js
-# Using nvm (recommended)
-nvm install 18
-nvm use 18
-
-# Or download from https://nodejs.org/
-```
-
-## 📦 Manual Installation (Advanced)
-
-If npm install fails, you can install manually:
-
-1. **Download the repository**:
-   ```bash
-   git clone https://github.com/nadavsimba24/geoclaw-universal.git
-   cd geoclaw-universal
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Create global symlink**:
-   ```bash
-   # Linux/macOS/WSL
-   sudo ln -s "$(pwd)/geoclaw.mjs" /usr/local/bin/geoclaw
-   
-   # Or use npm link
-   npm link
-   ```
-
-4. **Create Windows shortcut** (if needed):
-   ```powershell
-   # Create geoclaw.bat in a directory in your PATH
-   @echo off
-   node "C:\path\to\geoclaw-universal\geoclaw.mjs" %*
-   ```
-
-## 🎯 Quick Test
-
-After installation, run this test:
+### PDF ingest fails with "pdf-parse not installed"
 
 ```bash
-# Test basic functionality
-geoclaw --help
-geoclaw learn mcporter
-geoclaw status
+npm install -g pdf-parse    # for .pdf
+npm install -g mammoth      # for .docx
+npm install -g xlsx         # for .xlsx
 ```
 
-## 📚 Next Steps
+### Agent seems stuck
+Agents can take 30–60s per step when the LLM provider is slow. Check the
+step counter — you'll see `─── step N/12 ───` printed each turn. If it's
+truly stuck, Ctrl-C is safe; no data is ever half-written (atomic rename).
 
-1. **Read the documentation**: https://github.com/nadavsimba24/geoclaw-universal#readme
-2. **Explore components**: `geoclaw learn <component>`
-3. **Create magic workflows**: `geoclaw workflow create`
-4. **Join the community**: Report issues on GitHub
+### Memory corruption / lock-file left behind
+If a process is killed mid-write, a stale `memory.lock` is cleaned up after
+10 seconds automatically. To force-clear immediately:
 
-## 🆘 Getting Help
+```bash
+rm ~/.geoclaw/workspaces/<workspace>/memory.lock
+```
 
-If you encounter issues:
+### Diagnose the install
 
-1. **Check the error message** carefully
-2. **Verify Node.js version**: `node --version`
-3. **Check npm version**: `npm --version`
-4. **Look for existing issues**: https://github.com/nadavsimba24/geoclaw-universal/issues
-5. **Create a new issue** with:
-   - Your operating system
-   - Node.js version
-   - Exact error message
-   - Steps to reproduce
+```bash
+geoclaw doctor
+```
 
-## 🎉 Welcome to Geoclaw!
+---
 
-You're now ready to start creating transparent, educational automation workflows with Geoclaw v3.0! 🎭
+## 11. Environment variables (reference)
+
+| Variable | Purpose |
+|---|---|
+| `GEOCLAW_MODEL_PROVIDER`     | `deepseek` / `openai` / `anthropic` / `google` / `ollama` / `custom` |
+| `GEOCLAW_MODEL_NAME`         | e.g. `deepseek-chat`, `gpt-4o`, `claude-opus-4-7` |
+| `GEOCLAW_MODEL_API_KEY`      | API key for the provider |
+| `GEOCLAW_MODEL_BASE_URL`     | For `custom` or self-hosted OpenAI-compatible endpoints |
+| `GEOCLAW_WORKSPACE`          | Override the active workspace for one command |
+| `GEOCLAW_AGENT_MAX_STEPS`    | Step cap for the agent loop |
+| `GEOCLAW_TOOL_TIMEOUT_MS`    | Per-tool timeout (ms) |
+| `GEOCLAW_LLM_TIMEOUT_MS`     | Per-LLM-request timeout (ms) |
+| `GEOCLAW_SUBAGENT_MAX_DEPTH` | Subagent nesting cap |
+| `GEOCLAW_MONDAY_API_TOKEN`   | Monday.com API token |
+| `GEOCLAW_TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `GEOCLAW_DIR`                | Override the install directory (usually auto-detected) |
+
+These are set by `geoclaw setup` into a `.env` file. You can also set them
+ad-hoc in your shell for a single command.
+
+---
+
+## 12. Where data lives
+
+```
+~/.geoclaw/
+├── active-workspace                   current workspace name
+├── workspaces/
+│   ├── default/
+│   │   ├── memory.json                the knowledge base
+│   │   └── memory.lock                (transient, only during writes)
+│   ├── legal/
+│   ├── accounting/
+│   └── ...
+└── memory.json.migrated               (if migrated from pre-workspace install)
+```
+
+Back up `~/.geoclaw/workspaces/` to back up your entire knowledge base.
+
+---
+
+## 13. Uninstall
+
+```bash
+npm uninstall -g geoclaw-universal
+# Optional: also delete your knowledge base
+rm -rf ~/.geoclaw
+```
+
+---
+
+## 14. Getting help
+
+- **Built-in help**: `geoclaw --help`
+- **Doctor**: `geoclaw doctor`
+- **GitHub issues**: https://github.com/nadavsimba24/geoclaw-universal/issues
+
+When filing an issue, include:
+- Your OS and `node --version`
+- The exact command that failed
+- The full error output (set `DEBUG=1` for a stack trace)
+
+---
+
+Welcome to Geoclaw.
