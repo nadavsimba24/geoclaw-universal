@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Geoclaw interactive chat — tool-using, streams replies, Claude-Code-style UX.
+// Geoclaw interactive chat — tool-using, streaming, Claude-Code-style UX.
 
 const https = require('https');
 const http = require('http');
@@ -23,11 +23,14 @@ const MODEL    = env('GEOCLAW_MODEL_NAME', 'deepseek-chat');
 const API_KEY  = env('GEOCLAW_MODEL_API_KEY');
 const BASE_URL = env('GEOCLAW_MODEL_BASE_URL');
 
-const MAX_TOOL_STEPS = parseInt(process.env.GEOCLAW_CHAT_MAX_TOOL_STEPS || '8', 10);
-const MAX_HISTORY    = parseInt(process.env.GEOCLAW_CHAT_MAX_HISTORY    || '40', 10);
-const LLM_TIMEOUT_MS = parseInt(process.env.GEOCLAW_CHAT_LLM_TIMEOUT_MS || '120000', 10);
+const MAX_TOOL_STEPS        = parseInt(process.env.GEOCLAW_CHAT_MAX_TOOL_STEPS     || '10',     10);
+const MAX_HISTORY           = parseInt(process.env.GEOCLAW_CHAT_MAX_HISTORY        || '40',     10);
+const LLM_TIMEOUT_MS        = parseInt(process.env.GEOCLAW_CHAT_LLM_TIMEOUT_MS     || '120000', 10);
+const MAX_TOOL_RESULT_CHARS = parseInt(process.env.GEOCLAW_CHAT_MAX_TOOL_RESULT    || '4000',   10);
+const CONTEXT_WARN_TOKENS   = parseInt(process.env.GEOCLAW_CHAT_CONTEXT_WARN_TOKENS|| '80000',  10);
+const LLM_RETRIES           = parseInt(process.env.GEOCLAW_CHAT_LLM_RETRIES        || '2',      10);
 
-// Track the in-flight HTTP request so Ctrl-C can abort it without killing the REPL.
+// ── In-flight abort tracking ──────────────────────────────────────────────────
 let activeHttp = null;
 function abortActive(reason = 'cancelled by user') {
   if (activeHttp) {
@@ -43,6 +46,7 @@ const C = {
   reset:   '\x1b[0m',
   dim:     '\x1b[2m',
   bold:    '\x1b[1m',
+  boldoff: '\x1b[22m',
   cyan:    '\x1b[36m',
   green:   '\x1b[32m',
   yellow:  '\x1b[33m',
@@ -52,6 +56,7 @@ const C = {
   violet:  '\x1b[38;5;141m',
   teal:    '\x1b[38;5;80m',
   rose:    '\x1b[38;5;211m',
+  defaultfg:'\x1b[39m',
 };
 const USE_COLOR = !!process.stdout.isTTY && !process.env.NO_COLOR;
 const col = (code, s) => USE_COLOR ? `${code}${s}${C.reset}` : String(s);
@@ -59,19 +64,17 @@ const col = (code, s) => USE_COLOR ? `${code}${s}${C.reset}` : String(s);
 const hideCursor = () => { if (USE_COLOR) process.stdout.write('\x1b[?25l'); };
 const showCursor = () => { if (USE_COLOR) process.stdout.write('\x1b[?25h'); };
 process.on('exit', showCursor);
-// SIGINT fires here when readline ISN'T actively reading — i.e. during an in-flight turn.
-// At the prompt, the rl.on('SIGINT') handler below takes over. So here: abort if we can.
 process.on('SIGINT', () => {
-  if (abortActive('cancelled by user')) return;  // request aborted — REPL keeps going
+  if (abortActive('cancelled by user')) return;  // abort in-flight; REPL keeps going
   showCursor();
   process.exit(130);
 });
 process.on('SIGTERM', () => { showCursor(); process.exit(143); });
 
 // ── Tool calling ──────────────────────────────────────────────────────────────
-// Reuse the agent's tool catalog. Drop tools that don't make sense in continuous
-// chat: 'finish' (the conversation never ends), 'spawn_subagent' (nested agents
-// feel weird inline), 'speak' (we already have /voice for that).
+// Reuse the agent's tool catalog. Drop tools that don't fit continuous chat:
+// 'finish' (conversation never ends), 'spawn_subagent' (weird inline),
+// 'speak' (we have /voice for that).
 const CHAT_TOOL_NAMES = new Set([
   'remember', 'recall',
   'monday_list_boards', 'monday_get_board', 'monday_create_item',
@@ -81,7 +84,7 @@ const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.funct
 
 function providerSupportsTools() {
   if (PROVIDER === 'deepseek' || PROVIDER === 'openai') return true;
-  if (!['anthropic', 'google', 'ollama'].includes(PROVIDER) && BASE_URL) return true;  // custom OpenAI-compat
+  if (!['anthropic', 'google', 'ollama'].includes(PROVIDER) && BASE_URL) return true;
   return false;
 }
 const TOOLS_ON = providerSupportsTools();
@@ -172,7 +175,9 @@ function jsonPost(urlStr, headers, body, { timeoutMs = LLM_TIMEOUT_MS } = {}) {
       res.on('end', () => {
         if (activeHttp === req) activeHttp = null;
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          return reject(new Error(`HTTP ${res.statusCode}: ${chunks.slice(0, 400)}`));
+          const err = new Error(`HTTP ${res.statusCode}: ${chunks.slice(0, 400)}`);
+          err.statusCode = res.statusCode;
+          return reject(err);
         }
         try { resolve(JSON.parse(chunks)); }
         catch { reject(new Error(`Bad JSON: ${chunks.slice(0, 400)}`)); }
@@ -199,7 +204,12 @@ function postStream(urlStr, headers, body, onEvent, { timeoutMs = LLM_TIMEOUT_MS
       if (res.statusCode < 200 || res.statusCode >= 300) {
         let errChunks = '';
         res.on('data', (c) => (errChunks += c));
-        res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${errChunks.slice(0, 400)}`)));
+        res.on('end', () => {
+          if (activeHttp === req) activeHttp = null;
+          const err = new Error(`HTTP ${res.statusCode}: ${errChunks.slice(0, 400)}`);
+          err.statusCode = res.statusCode;
+          reject(err);
+        });
         return;
       }
       let buf = '';
@@ -227,12 +237,72 @@ function postStream(urlStr, headers, body, onEvent, { timeoutMs = LLM_TIMEOUT_MS
   });
 }
 
+// ── Retry wrapper ─────────────────────────────────────────────────────────────
+
+function isRetryable(err) {
+  const msg = (err && err.message) || '';
+  if (/cancelled by user/i.test(msg)) return false;
+  const status = err && err.statusCode;
+  if (status === 429) return true;
+  if (status >= 500 && status < 600) return true;
+  if (/ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|ENOTFOUND|timed out/i.test(msg)) return true;
+  return false;
+}
+
+async function retrying(fn, { retries = LLM_RETRIES, baseDelayMs = 800, label = 'LLM', onRetry } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try { return await fn(); }
+    catch (e) {
+      lastErr = e;
+      if (!isRetryable(e) || attempt === retries) break;
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 250);
+      if (onRetry) onRetry(e, attempt + 1, retries, delay);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
+// Classify LLM errors into friendlier messages.
+function explainError(err) {
+  const msg = (err && err.message) || String(err);
+  if (/cancelled by user/i.test(msg)) return { kind: 'cancel', text: msg };
+  if (err && err.statusCode === 401) return { kind: 'auth',  text: `auth failed (401). Run ${col(C.cyan, 'geoclaw setup')} or check GEOCLAW_MODEL_API_KEY.` };
+  if (err && err.statusCode === 429) return { kind: 'rate',  text: `rate-limited (429). Wait a moment and try ${col(C.cyan, '/retry')}.` };
+  if (err && err.statusCode >= 500)  return { kind: 'server',text: `${PROVIDER} server error (${err.statusCode}). Try ${col(C.cyan, '/retry')}.` };
+  if (/timed out/i.test(msg))        return { kind: 'timeout',text: `${msg}.` };
+  return { kind: 'generic', text: msg };
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+
 async function typewrite(text, onDelta, perChunkMs = 8) {
   const parts = text.match(/\S+\s*|\s+/g) || [text];
   for (const p of parts) {
     onDelta(p);
     if (perChunkMs) await new Promise(r => setTimeout(r, perChunkMs));
   }
+}
+
+// Lightweight markdown: bold + inline code. Triple-backtick blocks pass through.
+function mdRender(s) {
+  if (!USE_COLOR || !s) return s || '';
+  return s
+    .replace(/\*\*([^\n*]+)\*\*/g, `${C.bold}$1${C.boldoff}`)
+    .replace(/`([^\n`]+)`/g,        `${C.teal}$1${C.defaultfg}`);
+}
+
+function shortenJSON(obj, max) {
+  const s = typeof obj === 'string' ? obj : JSON.stringify(obj);
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
+// Cap content pushed into LLM history so one big tool result doesn't blow context.
+function truncateForHistory(jsonStr) {
+  if (jsonStr.length <= MAX_TOOL_RESULT_CHARS) return jsonStr;
+  return jsonStr.slice(0, MAX_TOOL_RESULT_CHARS) +
+    `\n...[truncated ${jsonStr.length - MAX_TOOL_RESULT_CHARS} chars — ask for specifics if you need them]`;
 }
 
 // ── Tool-using turn (OpenAI-compatible providers) ─────────────────────────────
@@ -244,28 +314,30 @@ function chatEndpoint() {
   return null;
 }
 
-async function llmWithTools(messages) {
+async function llmWithTools(messages, { tools = CHAT_TOOLS } = {}) {
   if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
   const endpoint = chatEndpoint();
   if (!endpoint) throw new Error(`Tool-using chat needs an OpenAI-compatible provider (got "${PROVIDER}")`);
+  const body = { model: MODEL, messages };
+  if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
   const data = await jsonPost(endpoint, {
     'Authorization': `Bearer ${API_KEY}`,
     'Content-Type':  'application/json',
-  }, {
-    model:       MODEL,
-    messages,
-    tools:       CHAT_TOOLS,
-    tool_choice: 'auto',
-  });
+  }, body);
   return {
     msg:   data.choices?.[0]?.message || { content: '[no content]' },
     usage: data.usage || null,
   };
 }
 
-function shortenJSON(obj, max) {
-  const s = JSON.stringify(obj);
-  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+function llmWithToolsRetrying(messages, opts) {
+  return retrying(() => llmWithTools(messages, opts), {
+    label: 'LLM',
+    onRetry: (e, n, max, delay) => {
+      // Clear the spinner line, print a retry notice, spinner will resume.
+      process.stdout.write(`\r\x1b[2K  ${col(C.yellow, '⚠')} ${explainError(e).text} (retry ${n}/${max} in ${Math.round(delay/1000)}s)\n`);
+    },
+  });
 }
 
 async function runTurnWithTools(history, ctx, marker) {
@@ -277,17 +349,21 @@ async function runTurnWithTools(history, ctx, marker) {
 
   try {
     for (let step = 0; step < MAX_TOOL_STEPS; step++) {
-      const { msg, usage } = await llmWithTools(history);
+      const { msg, usage } = await llmWithToolsRetrying(history);
       if (usage) {
         aggUsage = aggUsage
-          ? { total_tokens: (aggUsage.total_tokens || 0) + (usage.total_tokens || 0) }
+          ? {
+              total_tokens:     (aggUsage.total_tokens ?? 0)     + (usage.total_tokens ?? 0),
+              prompt_tokens:    (aggUsage.prompt_tokens ?? 0)    + (usage.prompt_tokens ?? 0),
+              completion_tokens:(aggUsage.completion_tokens ?? 0)+ (usage.completion_tokens ?? 0),
+            }
           : usage;
       }
       history.push(msg);
 
       const calls = msg.tool_calls || [];
 
-      // Inline narration alongside tool calls — print it dim, above the tool lines.
+      // Inline narration alongside tool calls — print dim, above the tool lines.
       if (msg.content && calls.length > 0) {
         spin.stop();
         console.log(`  ${col(C.dim, msg.content.trim())}`);
@@ -297,13 +373,12 @@ async function runTurnWithTools(history, ctx, marker) {
         spin.stop();
         process.stdout.write(marker);
         const content = msg.content || '';
-        await typewrite(content, (d) => process.stdout.write(d));
+        await typewrite(mdRender(content), (d) => process.stdout.write(d));
         process.stdout.write('\n');
         finalReply = content;
         break;
       }
 
-      // Run each tool call, show it Claude-Code-style.
       for (const call of calls) {
         spin.stop();
         let args = {};
@@ -321,17 +396,16 @@ async function runTurnWithTools(history, ctx, marker) {
         history.push({
           role: 'tool',
           tool_call_id: call.id,
-          content: JSON.stringify(result),
+          content: truncateForHistory(JSON.stringify(result)),
         });
       }
 
-      // Let the spinner tick again while we wait for the next LLM call.
       spin.start();
     }
 
     if (!finalReply) {
       spin.stop();
-      console.log(`  ${col(C.yellow, '⚠')} hit tool-call step limit (${MAX_TOOL_STEPS}) — consider rephrasing.`);
+      console.log(`  ${col(C.yellow, '⚠')} hit tool-call step limit (${MAX_TOOL_STEPS}) — set GEOCLAW_CHAT_MAX_TOOL_STEPS or rephrase.`);
     }
   } finally {
     spin.stop();
@@ -387,7 +461,7 @@ async function streamGoogle(messages, onDelta) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
   const data = await jsonPost(url, { 'Content-Type': 'application/json' }, body);
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '[no content]';
-  await typewrite(reply, onDelta);
+  await typewrite(mdRender(reply), onDelta);
   return { reply, usage: data.usageMetadata ?? null };
 }
 
@@ -447,14 +521,23 @@ async function runTurnStreaming(history, marker) {
   };
   let res;
   try {
-    switch (PROVIDER) {
-      case 'anthropic': res = await streamAnthropic(history, onDelta); break;
-      case 'google':    res = await streamGoogle(history, onDelta); break;
-      case 'ollama':    res = await streamOllama(history, onDelta); break;
-      case 'openai':    res = await streamOpenAIish(history, 'https://api.openai.com/v1/chat/completions', onDelta); break;
-      case 'deepseek':  res = await streamOpenAIish(history, 'https://api.deepseek.com/chat/completions',  onDelta); break;
-      default:          res = await streamOpenAIish(history, '', onDelta);
-    }
+    const run = async () => {
+      switch (PROVIDER) {
+        case 'anthropic': return streamAnthropic(history, onDelta);
+        case 'google':    return streamGoogle(history, onDelta);
+        case 'ollama':    return streamOllama(history, onDelta);
+        case 'openai':    return streamOpenAIish(history, 'https://api.openai.com/v1/chat/completions', onDelta);
+        case 'deepseek':  return streamOpenAIish(history, 'https://api.deepseek.com/chat/completions',  onDelta);
+        default:          return streamOpenAIish(history, '', onDelta);
+      }
+    };
+    res = await retrying(run, {
+      label: 'LLM',
+      onRetry: (e, n, max, delay) => {
+        if (!firstChunk) return;  // already committed content to screen; don't retry
+        process.stdout.write(`\r\x1b[2K  ${col(C.yellow, '⚠')} ${explainError(e).text} (retry ${n}/${max} in ${Math.round(delay/1000)}s)\n`);
+      },
+    });
   } finally {
     if (firstChunk) spin.stop();
   }
@@ -462,16 +545,92 @@ async function runTurnStreaming(history, marker) {
   return res;
 }
 
-// ── Context trim ──────────────────────────────────────────────────────────────
-
+// ── Context trim — preserves tool_call groups ─────────────────────────────────
+// A "turn" = user message + everything after it up to (not including) the next user.
+// We keep system + last N turns that fit within MAX_HISTORY messages.
 function trimHistory(messages) {
   if (messages.length <= MAX_HISTORY) return messages;
-  const head = messages.slice(0, 1);  // system
-  const tail = messages.slice(-(MAX_HISTORY - 2));
-  return [...head, { role: 'system', content: '[earlier turns trimmed to fit context]' }, ...tail];
+
+  const system = messages[0];
+  const turns = [];
+  let current = [];
+  for (let i = 1; i < messages.length; i++) {
+    if (messages[i].role === 'user') {
+      if (current.length) turns.push(current);
+      current = [messages[i]];
+    } else {
+      current.push(messages[i]);
+    }
+  }
+  if (current.length) turns.push(current);
+
+  const kept = [];
+  let total = 1;  // system
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (total + turns[i].length > MAX_HISTORY) break;
+    kept.unshift(turns[i]);
+    total += turns[i].length;
+  }
+
+  const dropped = turns.length - kept.length;
+  const out = [system];
+  if (dropped > 0) {
+    out.push({
+      role: 'system',
+      content: `[${dropped} earlier conversation turn(s) trimmed to keep context small — use /compact to summarize instead]`,
+    });
+  }
+  for (const t of kept) out.push(...t);
+  return out;
 }
 
-// ── Interactive REPL ──────────────────────────────────────────────────────────
+// ── Compaction — summarize older turns into one system message ────────────────
+async function compactHistory(history) {
+  if (history.length <= 3) throw new Error('not enough history to compact');
+  if (!TOOLS_ON && !chatEndpoint()) throw new Error('compaction needs an OpenAI-compatible provider');
+
+  const transcript = history.slice(1).map(m => {
+    if (m.role === 'tool') return `[tool result] ${(m.content || '').slice(0, 600)}`;
+    const who = m.role === 'user' ? 'User' : 'Assistant';
+    const tools = m.tool_calls ? ` [called: ${m.tool_calls.map(c => c.function.name).join(', ')}]` : '';
+    return `${who}${tools}: ${m.content || ''}`;
+  }).join('\n\n');
+
+  const messages = [
+    { role: 'system', content:
+`You are condensing a conversation transcript. Produce a concise summary that preserves:
+- User's goals and preferences
+- Important facts and decisions
+- Any IDs, names, file paths, or code verbatim
+- Open questions or unfinished work
+
+Be terse — aim for under 400 words. Do not include meta commentary about summarizing.`
+    },
+    { role: 'user', content: 'Transcript to summarize:\n\n' + transcript },
+  ];
+
+  const { msg } = await llmWithTools(messages, { tools: [] });
+  return msg.content || '[empty summary]';
+}
+
+// ── Slash commands (single source of truth for /help + tab completer) ─────────
+const SLASH_COMMANDS = [
+  { cmd: '/exit',    desc: 'quit chat' },
+  { cmd: '/clear',   desc: 'reset conversation history' },
+  { cmd: '/retry',   desc: 'redo the last user turn' },
+  { cmd: '/undo',    desc: 'drop the last user + assistant exchange' },
+  { cmd: '/compact', desc: 'summarize older history into one note to free context' },
+  { cmd: '/btw',     desc: '<text> — side-note folded into your next message' },
+  { cmd: '/tool',    desc: '<name> [json] — call a tool directly, bypassing the LLM' },
+  { cmd: '/history', desc: 'show message count, ~tokens, pending btw' },
+  { cmd: '/system',  desc: 'show current system prompt' },
+  { cmd: '/tools',   desc: 'list available tools' },
+  { cmd: '/voice',   desc: 'on|off — toggle text-to-speech for replies' },
+  { cmd: '/help',    desc: 'this message' },
+];
+const SLASH_NAMES = SLASH_COMMANDS.map(c => c.cmd);
+
+// ── REPL ──────────────────────────────────────────────────────────────────────
 
 function banner() {
   const w = Math.min((process.stdout.columns || 80), 78);
@@ -488,11 +647,8 @@ function banner() {
   console.log(col(C.violet, '│') + col(C.dim,  pad(tag,   tag.length))   + col(C.violet, '│'));
   console.log(col(C.violet, `└${hline}┘`));
 
-  const toolNote = TOOLS_ON
-    ? col(C.teal, 'tools: on')
-    : col(C.yellow, 'tools: off');
-  const info = `  ${col(C.teal, PROVIDER)} ${col(C.dim, '·')} ${col(C.bold, MODEL)} ${col(C.dim, '·')} ws: ${col(C.cyan, memory.activeWorkspace())} ${col(C.dim, '·')} ${toolNote}`;
-  console.log(info);
+  const toolNote = TOOLS_ON ? col(C.teal, 'tools: on') : col(C.yellow, 'tools: off');
+  console.log(`  ${col(C.teal, PROVIDER)} ${col(C.dim, '·')} ${col(C.bold, MODEL)} ${col(C.dim, '·')} ws: ${col(C.cyan, memory.activeWorkspace())} ${col(C.dim, '·')} ${toolNote}`);
   console.log(col(C.dim, '  type a message, or /help for commands  ·  /exit to quit'));
   console.log('');
 }
@@ -500,23 +656,10 @@ function banner() {
 function printHelp() {
   console.log('');
   console.log(col(C.bold, '  Commands'));
-  const rows = [
-    ['/exit',            'quit chat'],
-    ['/clear',           'reset conversation history'],
-    ['/retry',           'redo the last user turn'],
-    ['/undo',            'drop the last user + assistant exchange'],
-    ['/btw <text>',      'add a side-note the next turn should consider'],
-    ['/tool <name> [j]', 'call a tool directly — e.g. /tool recall {"query":"..."}'],
-    ['/history',         'show message count, token estimate, pending btw'],
-    ['/system',          'show current system prompt'],
-    ['/tools',           'list available tools'],
-    ['/voice on|off',    'toggle text-to-speech for replies'],
-    ['/help',            'this message'],
-  ];
-  for (const [cmd, desc] of rows) {
-    console.log(`  ${col(C.cyan, cmd.padEnd(18))} ${col(C.dim, desc)}`);
+  for (const { cmd, desc } of SLASH_COMMANDS) {
+    console.log(`  ${col(C.cyan, cmd.padEnd(10))} ${col(C.dim, desc)}`);
   }
-  console.log(col(C.dim, `  (ctrl-c while geoclaw is thinking cancels the reply; ctrl-c at the prompt quits)`));
+  console.log(col(C.dim, '  (tab completes; ctrl-c cancels a running reply; ctrl-c at the prompt quits)'));
   console.log('');
 }
 
@@ -529,19 +672,35 @@ function printTools() {
   console.log('');
 }
 
+function historyCharCount(history) {
+  return history.reduce((n, m) => {
+    const c = (typeof m.content === 'string' ? m.content.length : 0);
+    const tc = (m.tool_calls || []).reduce((x, c) => x + (c.function?.arguments?.length || 0), 0);
+    return n + c + tc;
+  }, 0);
+}
+
 async function repl() {
   banner();
+
+  const slashCompleter = (line) => {
+    if (!line.startsWith('/')) return [[], line];
+    const hits = SLASH_NAMES.filter(c => c.startsWith(line));
+    return [hits.length ? hits : SLASH_NAMES, line];
+  };
 
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
     terminal: true,
+    completer: slashCompleter,
   });
 
   const history = [{ role: 'system', content: SYSTEM_PROMPT }];
-  let voiceOn = process.argv.slice(2).includes('--voice');
-  let pendingNote = '';   // text added via /btw to be folded into the next user message
+  let voiceOn      = process.argv.slice(2).includes('--voice');
+  let pendingNote  = '';
   let turnInFlight = false;
+  let lastUserText = '';
 
   const ctx = {
     rl,
@@ -555,18 +714,18 @@ async function repl() {
   const PROMPT = `${col(C.cyan, '▌')} ${col(C.bold, 'you')} ${col(C.dim, '›')} `;
   const MARKER = `${col(C.orange, '▌')} ${col(C.bold, 'geoclaw')} ${col(C.dim, '›')} `;
 
-  // Ctrl-C behaviour: during a turn, abort the HTTP request and drop back to prompt.
-  // At the prompt (no turn in flight), quit cleanly.
   rl.on('SIGINT', () => {
-    // During a turn: abort the HTTP request; the turn's catch prints "(cancelled)".
+    // During a turn: abort HTTP; the turn's catch prints "(cancelled)".
     if (turnInFlight && abortActive('cancelled by user')) return;
-    // At the prompt (or if no request is in flight): quit cleanly.
+    // At the prompt: quit cleanly.
     console.log(col(C.dim, '\n  bye.'));
     rl.close();
   });
 
-  // Run one conversation turn — returns when done, aborted, or errored.
+  // Run one turn. Returns normally on success/cancel; errors are handled inside.
   const runTurn = async (userText) => {
+    lastUserText = userText;
+    const preTurnLength = history.length;
     history.push({ role: 'user', content: userText });
     ctx.workspace = memory.activeWorkspace();
     history[0] = { role: 'system', content: buildSystemPrompt(userText) };
@@ -585,17 +744,25 @@ async function repl() {
       const stats = tokens ? `${tokens} tokens · ${secs}s` : `${secs}s`;
       console.log(col(C.dim, `  ${stats}`));
 
+      // Push the assistant's final content to real history so subsequent turns see it.
       if (reply) history.push({ role: 'assistant', content: reply });
+
+      // Warn if context is getting heavy.
+      const approxCtx = Math.round(historyCharCount(history) / 4);
+      if (approxCtx > CONTEXT_WARN_TOKENS) {
+        console.log(col(C.yellow, `  ⚠ context ~${approxCtx.toLocaleString()} tokens — run ${col(C.cyan, '/compact')} to summarize older turns`));
+      }
+
       if (voiceOn && reply) tts.speak(reply, { silent: true }).catch(() => {});
     } catch (err) {
-      const msg = err && err.message ? err.message : String(err);
-      if (/cancelled by user/i.test(msg)) {
+      // Full rollback — ensures no orphaned tool_calls / tool messages remain.
+      history.length = preTurnLength;
+      const { kind, text } = explainError(err);
+      if (kind === 'cancel') {
         console.log(col(C.dim, '\n  (cancelled — use /retry to re-run, or just type a new message)'));
       } else {
-        console.log(`  ${col(C.red, '✗')} ${msg}`);
+        console.log(`  ${col(C.red, '✗')} ${text}`);
       }
-      // On error/abort we drop the failed user turn so /retry or a fresh message works.
-      if (history[history.length - 1]?.role === 'user') history.pop();
     } finally {
       turnInFlight = false;
     }
@@ -631,11 +798,11 @@ async function repl() {
         const userCount      = history.filter(m => m.role === 'user').length;
         const assistantCount = history.filter(m => m.role === 'assistant').length;
         const toolCount      = history.filter(m => m.role === 'tool').length;
-        const charCount      = history.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
-        const tokEst         = Math.round(charCount / 4);  // rough
+        const tokEst         = Math.round(historyCharCount(history) / 4);
+        const pct            = Math.round((tokEst / CONTEXT_WARN_TOKENS) * 100);
         console.log('');
         console.log(col(C.dim, `  messages: ${history.length} (${userCount} user, ${assistantCount} assistant, ${toolCount} tool)`));
-        console.log(col(C.dim, `  ~${tokEst.toLocaleString()} tokens in context  ·  limit is ${MAX_HISTORY} messages`));
+        console.log(col(C.dim, `  ~${tokEst.toLocaleString()} tokens in context  ·  ${pct}% of warn threshold`));
         if (pendingNote) console.log(col(C.dim, `  pending btw: ${pendingNote.slice(0, 120)}${pendingNote.length > 120 ? '…' : ''}`));
         console.log('');
         return ask();
@@ -651,35 +818,55 @@ async function repl() {
       if (text.startsWith('/btw')) {
         const note = text.slice(4).trim();
         if (!note) {
-          if (pendingNote) { console.log(col(C.dim, `  (pending btw: ${pendingNote})`)); }
-          else             { console.log(col(C.dim, '  (usage: /btw <text to fold into the next message>)')); }
+          if (pendingNote) console.log(col(C.dim, `  (pending btw: ${pendingNote})`));
+          else             console.log(col(C.dim, '  (usage: /btw <text to fold into the next message>)'));
         } else {
           pendingNote = pendingNote ? pendingNote + '\n' + note : note;
-          console.log(col(C.dim, `  (noted — will be added to your next message)`));
+          console.log(col(C.dim, '  (noted — will be added to your next message)'));
         }
         console.log('');
         return ask();
       }
       if (text === '/undo') {
         let popped = 0;
-        // Drop trailing tool messages, then assistant, then user.
         while (history.length > 1 && history[history.length - 1].role !== 'user') { history.pop(); popped++; }
-        if (history.length > 1 && history[history.length - 1].role === 'user')   { history.pop(); popped++; }
+        if (history.length > 1 && history[history.length - 1].role === 'user')    { history.pop(); popped++; }
         console.log(col(C.dim, popped ? `  (undid ${popped} message${popped === 1 ? '' : 's'})` : '  (nothing to undo)'));
         console.log('');
         return ask();
       }
       if (text === '/retry') {
-        // Find the last user message, drop everything after it, re-run.
-        let lastUserIdx = -1;
-        for (let i = history.length - 1; i >= 0; i--) {
-          if (history[i].role === 'user') { lastUserIdx = i; break; }
+        if (!lastUserText) { console.log(col(C.dim, '  (no previous turn to retry)')); console.log(''); return ask(); }
+        // If the last user message is still in history (successful prior turn), splice back to it.
+        for (let i = history.length - 1; i > 0; i--) {
+          if (history[i].role === 'user') { history.length = i; break; }
         }
-        if (lastUserIdx < 0) { console.log(col(C.dim, '  (no previous turn to retry)')); console.log(''); return ask(); }
-        const lastUser = history[lastUserIdx].content;
-        history.splice(lastUserIdx);  // drop that user + everything after
-        console.log(col(C.dim, `  (retrying: ${lastUser.slice(0, 80)}${lastUser.length > 80 ? '…' : ''})`));
-        await runTurn(lastUser);
+        const toRun = lastUserText;
+        console.log(col(C.dim, `  (retrying: ${toRun.slice(0, 80)}${toRun.length > 80 ? '…' : ''})`));
+        await runTurn(toRun);
+        console.log('');
+        return ask();
+      }
+      if (text === '/compact') {
+        if (history.length <= 3) { console.log(col(C.dim, '  (not enough history to compact)')); console.log(''); return ask(); }
+        const spin = makeSpinner('Compacting');
+        spin.start();
+        turnInFlight = true;
+        try {
+          const summary = await compactHistory(history);
+          const oldCount = history.length;
+          history.splice(1, history.length - 1, {
+            role: 'system',
+            content: `## Previously in this conversation (compacted summary)\n\n${summary}`,
+          });
+          spin.stop();
+          console.log(`  ${col(C.green, '✓')} compacted ${col(C.dim, `(${oldCount} messages → ${history.length})`)}`);
+        } catch (e) {
+          spin.stop();
+          console.log(`  ${col(C.red, '✗')} compaction failed: ${e.message}`);
+        } finally {
+          turnInFlight = false;
+        }
         console.log('');
         return ask();
       }
@@ -710,6 +897,13 @@ async function repl() {
         return ask();
       }
 
+      // Unknown /command — don't send it to the LLM by accident.
+      if (text.startsWith('/')) {
+        console.log(col(C.dim, `  (unknown command: ${text.split(' ')[0]} — try /help)`));
+        console.log('');
+        return ask();
+      }
+
       // ── Real user message ─────────────────────────────────────────────────
       let userText = text;
       if (pendingNote) {
@@ -727,7 +921,7 @@ async function repl() {
   rl.on('close', () => { showCursor(); process.exit(0); });
 }
 
-// ── One-shot mode: geoclaw chat "your question" ───────────────────────────────
+// ── One-shot mode ─────────────────────────────────────────────────────────────
 
 async function oneShot(prompt) {
   const ctx = {
@@ -742,17 +936,13 @@ async function oneShot(prompt) {
     { role: 'system', content: buildSystemPrompt(prompt) },
     { role: 'user',   content: prompt },
   ];
-  if (TOOLS_ON) {
-    const { reply } = await runTurnWithTools(messages, ctx, '');
-    if (reply && !process.stdout.isTTY) process.stdout.write(reply + '\n');
-  } else {
-    await runTurnStreaming(messages, '');
-  }
+  if (TOOLS_ON) await runTurnWithTools(messages, ctx, '');
+  else          await runTurnStreaming(messages, '');
 }
 
 if (require.main === module) {
   const args = process.argv.slice(2).filter(a => a !== '--voice');
   const arg  = args.join(' ').trim();
-  if (arg) oneShot(arg).catch((e) => { console.error(`${col(C.red, '✗')} ${e.message}`); process.exit(1); });
+  if (arg) oneShot(arg).catch((e) => { console.error(`${col(C.red, '✗')} ${explainError(e).text}`); process.exit(1); });
   else     repl();
 }
