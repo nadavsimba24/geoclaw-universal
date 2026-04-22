@@ -303,6 +303,18 @@ function llmCall(messages, { tools, stream } = {}) {
   return { u, data, headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), ...(stream && { 'Accept': 'text/event-stream' }) } };
 }
 
+function dedupeRepeatedBlock(s) {
+  if (!s || s.length < 160) return s;
+  const trimmed = s.trim();
+  const half = Math.floor(trimmed.length / 2);
+  const a = trimmed.slice(0, half).trim();
+  const b = trimmed.slice(half).trim();
+  if (a.length >= 80 && a === b) return a;
+  const m = trimmed.match(/^([\s\S]{80,}?)\n\s*\n([\s\S]+)$/);
+  if (m && m[1].trim() === m[2].trim()) return m[1].trim();
+  return s;
+}
+
 function llmJSON(messages, { tools } = {}) {
   return new Promise((resolve, reject) => {
     const { u, data, headers } = llmCall(messages, { tools });
@@ -382,9 +394,11 @@ async function handleChatSSE(req, res, body) {
       if (!msg) { send('error', { message: 'no choice' }); break; }
       messages.push(msg);
 
-      if (msg.content) send('content', { text: msg.content });
-
       const calls = msg.tool_calls || [];
+      if (msg.content) {
+        const text = calls.length ? msg.content : dedupeRepeatedBlock(msg.content);
+        send('content', { text });
+      }
       if (!calls.length) { send('usage', data.usage || {}); break; }
 
       for (const call of calls) {

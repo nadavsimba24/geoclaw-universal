@@ -289,6 +289,22 @@ async function typewrite(text, onDelta, perChunkMs = 8) {
   }
 }
 
+// DeepSeek occasionally emits the same final answer twice in one message
+// (typically separated by a blank line) when it loops on empty tool results.
+// If the content is literally `X\n\nX` with X ≥ 80 chars, collapse to X.
+function dedupeRepeatedBlock(s) {
+  if (!s || s.length < 160) return s;
+  const trimmed = s.trim();
+  const half = Math.floor(trimmed.length / 2);
+  const a = trimmed.slice(0, half).trim();
+  const b = trimmed.slice(half).trim();
+  if (a.length >= 80 && a === b) return a;
+  // Also handle "X\n\nX" with optional whitespace in between.
+  const m = trimmed.match(/^([\s\S]{80,}?)\n\s*\n([\s\S]+)$/);
+  if (m && m[1].trim() === m[2].trim()) return m[1].trim();
+  return s;
+}
+
 // Lightweight markdown: bold + inline code. Triple-backtick blocks pass through.
 function mdRender(s) {
   if (!USE_COLOR || !s) return s || '';
@@ -376,7 +392,7 @@ async function runTurnWithTools(history, ctx, marker) {
       if (calls.length === 0) {
         spin.stop();
         process.stdout.write(marker);
-        const content = msg.content || '';
+        const content = dedupeRepeatedBlock(msg.content || '');
         await typewrite(mdRender(content), (d) => process.stdout.write(d));
         process.stdout.write('\n');
         finalReply = content;

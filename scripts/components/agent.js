@@ -390,7 +390,13 @@ async function callTool(name, args, ctx) {
       }
       case 'read_skill': {
         const body = skills.readSkillBody(args.name);
-        if (!body) return { ok: false, error: `no skill named "${args.name}". Use the skill manifest in the system prompt for available names.` };
+        if (!body) {
+          const available = skills.listSkills({}).map(s => s.name);
+          const hint = available.length
+            ? ` Available: ${available.slice(0, 20).join(', ')}.`
+            : ' No skills are installed. Do NOT retry; answer the user in plain language and suggest `geoclaw skills install-bundle israeli-tax-season` (or another bundle from the manifest guidance above).';
+          return { ok: false, error: `no skill named "${args.name}".${hint}` };
+        }
         return { ok: true, name: args.name, body };
       }
       case 'finish': {

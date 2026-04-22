@@ -27,6 +27,16 @@ const { env } = require('./env.js');
 const GLOBAL_SKILLS  = path.join(os.homedir(), '.geoclaw', 'skills');
 const PROJECT_SKILLS_A = path.join(process.cwd(), '.geoclaw', 'skills');
 const PROJECT_SKILLS_B = path.join(process.cwd(), 'skills');
+// Other agents' global skill dirs — skills-il and similar installers drop
+// skills into these. We read them too so users don't need to manually mirror.
+const FOREIGN_GLOBAL_ROOTS = [
+  path.join(os.homedir(), '.agents',   'skills'),
+  path.join(os.homedir(), '.claude',   'skills'),
+  path.join(os.homedir(), '.codex',    'skills'),
+  path.join(os.homedir(), '.cursor',   'skills'),
+  path.join(os.homedir(), '.opencode', 'skills'),
+  path.join(os.homedir(), '.openclaw', 'skills'),
+];
 const SKILLS_IL_PACKAGE = process.env.GEOCLAW_SKILLS_PACKAGE || 'skills-il';
 const NPX_TIMEOUT_MS    = parseInt(process.env.GEOCLAW_SKILLS_NPX_TIMEOUT_MS || '120000', 10);
 
@@ -84,13 +94,18 @@ function* walkSkillDirs(root, scope) {
   }
 }
 
-function listSkills({ includeGlobal = true, includeProject = true } = {}) {
+function listSkills({ includeGlobal = true, includeProject = true, includeForeign = true } = {}) {
   const roots = [];
   if (includeProject) {
     if (fs.existsSync(PROJECT_SKILLS_A)) roots.push([PROJECT_SKILLS_A, 'project']);
     if (fs.existsSync(PROJECT_SKILLS_B)) roots.push([PROJECT_SKILLS_B, 'project']);
   }
   if (includeGlobal) roots.push([GLOBAL_SKILLS, 'global']);
+  if (includeForeign) {
+    for (const r of FOREIGN_GLOBAL_ROOTS) {
+      if (fs.existsSync(r)) roots.push([r, 'global']);
+    }
+  }
 
   const seen = new Set();
   const out = [];
@@ -143,14 +158,24 @@ function removeSkill(name) {
 
 function buildSkillsManifest({ max = 40 } = {}) {
   const skills = listSkills({}).slice(0, max);
-  if (!skills.length) return '';
+  if (!skills.length) {
+    return [
+      '',
+      'No domain-specific skills are installed. If the user asks about a specialized topic (Israeli taxes/VAT, Hebrew content, olim paperwork, small-business bookkeeping, legal compliance, etc.) tell them — in their language — that you can install relevant expertise via the `skills-il` registry. Suggest one of:',
+      '- `geoclaw skills install-bundle israeli-tax-season`   (VAT, annual returns, withholding)',
+      '- `geoclaw skills install-bundle freelancer-accountant` (invoicing, bookkeeping)',
+      '- `geoclaw skills install-bundle small-business-starter` (invoicing, payroll, payment chasing)',
+      '- `geoclaw skills install-bundle hebrew-first` (Hebrew writing, RTL, accessibility)',
+      'Or in the web UI: Skills pane → + Install. Do NOT invent skill names — only suggest bundles from the list above.',
+    ].join('\n');
+  }
   const lines = skills.map(s => {
     const desc = (s.description || '').replace(/\s+/g, ' ').slice(0, 240);
     return `- ${s.name} [${s.scope}]: ${desc}`;
   });
   return [
     `\nAvailable skills (SKILL.md format). When a user request matches one of these, READ the skill body BEFORE responding — the body contains precise step-by-step instructions.`,
-    `To read a skill, call read_skill({ name: "<skill-name>" }).`,
+    `To read a skill, call read_skill({ name: "<skill-name>" }). When asked "what skills do you have", answer from this list — do NOT call recall or any other tool.`,
     ...lines,
   ].join('\n');
 }
