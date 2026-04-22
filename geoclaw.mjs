@@ -65,6 +65,7 @@ function printHelp() {
 Usage: geoclaw <command> [options]
 
 Commands:
+  chat            Talk to your configured LLM (interactive)
   start           Start Geoclaw agent platform
   setup           Interactive setup wizard
   doctor          Check system requirements & diagnose issues
@@ -396,6 +397,10 @@ async function main() {
 
     case 'monday':
       await runScript('components/monday-integration.js', args.slice(1));
+      break;
+
+    case 'chat':
+      await runScript('components/chat.js', args.slice(1));
       break;
 
     case 'doctor':
