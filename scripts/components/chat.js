@@ -14,6 +14,7 @@ try {
 } catch { /* dotenv is optional — env vars from the shell still work */ }
 
 const memory = require('./memory.js');
+const tts    = require('./tts.js');
 
 const PROVIDER = (process.env.GEOCLAW_MODEL_PROVIDER || 'deepseek').toLowerCase();
 const MODEL    = process.env.GEOCLAW_MODEL_NAME || 'deepseek-chat';
@@ -138,7 +139,7 @@ function banner() {
   console.log('║                      Geoclaw Chat                            ║');
   console.log('╚══════════════════════════════════════════════════════════════╝');
   console.log(`Provider: ${PROVIDER}  |  Model: ${MODEL}  |  Workspace: ${memory.activeWorkspace()}`);
-  console.log('Type your message. Commands: /exit, /clear, /system, /help');
+  console.log('Type your message. Commands: /exit, /clear, /system, /voice, /help');
   console.log('');
 }
 
@@ -152,6 +153,8 @@ async function repl() {
   });
 
   const history = [{ role: 'system', content: SYSTEM_PROMPT }];
+  // Voice is opt-in via --voice flag or /voice on inside the REPL.
+  let voiceOn = process.argv.slice(2).includes('--voice');
 
   const ask = () => {
     rl.question('\x1b[36myou ›\x1b[0m ', async (line) => {
@@ -169,14 +172,22 @@ async function repl() {
         return ask();
       }
       if (text === '/help') {
-        console.log('/exit    quit chat');
-        console.log('/clear   reset conversation history');
-        console.log('/system  show current system prompt');
-        console.log('/help    show this help');
+        console.log('/exit           quit chat');
+        console.log('/clear          reset conversation history');
+        console.log('/system         show current system prompt');
+        console.log('/voice on|off   toggle text-to-speech for replies');
+        console.log('/help           show this help');
         return ask();
       }
       if (text === '/system') {
         console.log(history[0].content);
+        return ask();
+      }
+      if (text.startsWith('/voice')) {
+        const mode = text.split(/\s+/)[1];
+        if (mode === 'on')       { voiceOn = true;  console.log('(voice on)'); }
+        else if (mode === 'off') { voiceOn = false; console.log('(voice off)'); }
+        else console.log(`(voice ${voiceOn ? 'on' : 'off'} — use /voice on or /voice off)`);
         return ask();
       }
 
@@ -195,6 +206,7 @@ async function repl() {
           if (tokens) console.log(`\x1b[90m(${tokens} tokens)\x1b[0m`);
         }
         history.push({ role: 'assistant', content: reply });
+        if (voiceOn) tts.speak(reply, { silent: true }).catch(() => {});
       } catch (err) {
         process.stdout.write('\x1b[2K');
         console.log(`\x1b[31merror:\x1b[0m ${err.message}`);

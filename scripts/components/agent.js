@@ -14,6 +14,7 @@ try {
 } catch { /* dotenv is optional — env vars from the shell still work */ }
 
 const memory = require('./memory.js');
+const tts    = require('./tts.js');
 
 const PROVIDER = (process.env.GEOCLAW_MODEL_PROVIDER || 'deepseek').toLowerCase();
 const MODEL    = process.env.GEOCLAW_MODEL_NAME || 'deepseek-chat';
@@ -127,6 +128,18 @@ const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'speak',
+      description: 'Narrate a short message out loud via text-to-speech. Use sparingly — for key updates, not every step.',
+      parameters: {
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'ask_user',
       description: 'Pause and ask the user a clarifying question. Only works in interactive mode.',
       parameters: {
@@ -226,6 +239,10 @@ async function callTool(name, args, ctx) {
           { chat_id: args.chatId, text: args.text },
         );
         return { ok: data.ok === true, result: data };
+      }
+      case 'speak': {
+        await tts.speak(args.text, { silent: true });
+        return { ok: true };
       }
       case 'ask_user': {
         if (!ctx.interactive) {
