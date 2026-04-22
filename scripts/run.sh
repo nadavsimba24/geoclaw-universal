@@ -117,14 +117,27 @@ RUNTIME_MODE="${GEOCLAW_RUNTIME_MODE:-cli}"
 case "$RUNTIME_MODE" in
   cli)
     print_status "Running in CLI mode (lightweight, direct execution)"
-    # Start MCP server in background if enabled
+    echo ""
+    print_success "Geoclaw is ready."
+    echo ""
+    echo "Use these commands to interact with Geoclaw:"
+    echo "  geoclaw status           - see what's enabled"
+    echo "  geoclaw learn <topic>    - learn about a component"
+    echo "  geoclaw mcp list         - discover MCP servers"
+    echo "  geoclaw workflow create  - build a workflow"
+    echo ""
+
+    # If MCP server is enabled, run it in the FOREGROUND as the daemon
     if [[ "${GEOCLAW_MCP_SERVER_ENABLED:-false}" == "true" ]]; then
-      print_status "Starting Geoclaw MCP server..."
-      node "$PROJECT_DIR/scripts/components/mcp-server.js" &
-      MCP_PID=$!
-      print_success "MCP server started (pid $MCP_PID)"
+      print_status "Starting Geoclaw MCP server (Ctrl+C to stop)..."
+      echo ""
+      exec node "$PROJECT_DIR/scripts/components/mcp-server.js"
     fi
-    exec node "$PROJECT_DIR/geoclaw.mjs" "$@"
+
+    # Nothing to keep running — exit cleanly.
+    echo "No daemon services are enabled. Exiting."
+    echo "Tip: enable MCP Server in 'geoclaw setup' to keep a persistent service running."
+    exit 0
     ;;
   docker)
     print_status "Running in Docker container (isolated, secure)"
