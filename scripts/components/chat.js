@@ -25,6 +25,18 @@ const BASE_URL = env('GEOCLAW_MODEL_BASE_URL');
 
 const MAX_TOOL_STEPS = parseInt(process.env.GEOCLAW_CHAT_MAX_TOOL_STEPS || '8', 10);
 const MAX_HISTORY    = parseInt(process.env.GEOCLAW_CHAT_MAX_HISTORY    || '40', 10);
+const LLM_TIMEOUT_MS = parseInt(process.env.GEOCLAW_CHAT_LLM_TIMEOUT_MS || '120000', 10);
+
+// Track the in-flight HTTP request so Ctrl-C can abort it without killing the REPL.
+let activeHttp = null;
+function abortActive(reason = 'cancelled by user') {
+  if (activeHttp) {
+    try { activeHttp.destroy(new Error(reason)); } catch { /* ignore */ }
+    activeHttp = null;
+    return true;
+  }
+  return false;
+}
 
 // ── ANSI palette ──────────────────────────────────────────────────────────────
 const C = {
@@ -46,8 +58,14 @@ const col = (code, s) => USE_COLOR ? `${code}${s}${C.reset}` : String(s);
 
 const hideCursor = () => { if (USE_COLOR) process.stdout.write('\x1b[?25l'); };
 const showCursor = () => { if (USE_COLOR) process.stdout.write('\x1b[?25h'); };
-process.on('exit',    showCursor);
-process.on('SIGINT',  () => { showCursor(); process.exit(130); });
+process.on('exit', showCursor);
+// SIGINT fires here when readline ISN'T actively reading — i.e. during an in-flight turn.
+// At the prompt, the rl.on('SIGINT') handler below takes over. So here: abort if we can.
+process.on('SIGINT', () => {
+  if (abortActive('cancelled by user')) return;  // request aborted — REPL keeps going
+  showCursor();
+  process.exit(130);
+});
 process.on('SIGTERM', () => { showCursor(); process.exit(143); });
 
 // ── Tool calling ──────────────────────────────────────────────────────────────
@@ -139,7 +157,7 @@ function makeSpinner(initialQuip) {
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 
-function jsonPost(urlStr, headers, body) {
+function jsonPost(urlStr, headers, body, { timeoutMs = LLM_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const lib = u.protocol === 'https:' ? https : http;
@@ -147,10 +165,12 @@ function jsonPost(urlStr, headers, body) {
     const req = lib.request(u, {
       method: 'POST',
       headers: { 'Content-Length': Buffer.byteLength(data), ...headers },
+      timeout: timeoutMs,
     }, (res) => {
       let chunks = '';
       res.on('data', (c) => (chunks += c));
       res.on('end', () => {
+        if (activeHttp === req) activeHttp = null;
         if (res.statusCode < 200 || res.statusCode >= 300) {
           return reject(new Error(`HTTP ${res.statusCode}: ${chunks.slice(0, 400)}`));
         }
@@ -158,13 +178,15 @@ function jsonPost(urlStr, headers, body) {
         catch { reject(new Error(`Bad JSON: ${chunks.slice(0, 400)}`)); }
       });
     });
-    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error(`request timed out after ${timeoutMs}ms — set GEOCLAW_CHAT_LLM_TIMEOUT_MS to extend`)));
+    req.on('error',   (e) => { if (activeHttp === req) activeHttp = null; reject(e); });
+    activeHttp = req;
     req.write(data);
     req.end();
   });
 }
 
-function postStream(urlStr, headers, body, onEvent) {
+function postStream(urlStr, headers, body, onEvent, { timeoutMs = LLM_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const lib = u.protocol === 'https:' ? https : http;
@@ -172,6 +194,7 @@ function postStream(urlStr, headers, body, onEvent) {
     const req = lib.request(u, {
       method: 'POST',
       headers: { 'Content-Length': Buffer.byteLength(data), ...headers },
+      timeout: timeoutMs,
     }, (res) => {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         let errChunks = '';
@@ -193,10 +216,12 @@ function postStream(urlStr, headers, body, onEvent) {
           try { onEvent(JSON.parse(payload)); } catch { /* ignore */ }
         }
       });
-      res.on('end', resolve);
-      res.on('error', reject);
+      res.on('end',   () => { if (activeHttp === req) activeHttp = null; resolve(); });
+      res.on('error', (e) => { if (activeHttp === req) activeHttp = null; reject(e); });
     });
-    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error(`stream timed out after ${timeoutMs}ms — set GEOCLAW_CHAT_LLM_TIMEOUT_MS to extend`)));
+    req.on('error',   (e) => { if (activeHttp === req) activeHttp = null; reject(e); });
+    activeHttp = req;
     req.write(data);
     req.end();
   });
@@ -376,11 +401,12 @@ async function streamOllama(messages, onDelta) {
     const req = lib.request(u, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      timeout: LLM_TIMEOUT_MS,
     }, (res) => {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         let errChunks = '';
         res.on('data', (c) => (errChunks += c));
-        res.on('end', () => reject(new Error(`HTTP ${res.statusCode}: ${errChunks.slice(0, 400)}`)));
+        res.on('end', () => { if (activeHttp === req) activeHttp = null; reject(new Error(`HTTP ${res.statusCode}: ${errChunks.slice(0, 400)}`)); });
         return;
       }
       let buf = '';
@@ -399,10 +425,12 @@ async function streamOllama(messages, onDelta) {
           } catch { /* ignore */ }
         }
       });
-      res.on('end', resolve);
-      res.on('error', reject);
+      res.on('end',   () => { if (activeHttp === req) activeHttp = null; resolve(); });
+      res.on('error', (e) => { if (activeHttp === req) activeHttp = null; reject(e); });
     });
-    req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error(`ollama stream timed out after ${LLM_TIMEOUT_MS}ms`)));
+    req.on('error',   (e) => { if (activeHttp === req) activeHttp = null; reject(e); });
+    activeHttp = req;
     req.write(data);
     req.end();
   });
@@ -473,16 +501,22 @@ function printHelp() {
   console.log('');
   console.log(col(C.bold, '  Commands'));
   const rows = [
-    ['/exit',         'quit chat'],
-    ['/clear',        'reset conversation history'],
-    ['/system',       'show current system prompt'],
-    ['/tools',        'list available tools'],
-    ['/voice on|off', 'toggle text-to-speech for replies'],
-    ['/help',         'this message'],
+    ['/exit',            'quit chat'],
+    ['/clear',           'reset conversation history'],
+    ['/retry',           'redo the last user turn'],
+    ['/undo',            'drop the last user + assistant exchange'],
+    ['/btw <text>',      'add a side-note the next turn should consider'],
+    ['/tool <name> [j]', 'call a tool directly — e.g. /tool recall {"query":"..."}'],
+    ['/history',         'show message count, token estimate, pending btw'],
+    ['/system',          'show current system prompt'],
+    ['/tools',           'list available tools'],
+    ['/voice on|off',    'toggle text-to-speech for replies'],
+    ['/help',            'this message'],
   ];
   for (const [cmd, desc] of rows) {
-    console.log(`  ${col(C.cyan, cmd.padEnd(15))} ${col(C.dim, desc)}`);
+    console.log(`  ${col(C.cyan, cmd.padEnd(18))} ${col(C.dim, desc)}`);
   }
+  console.log(col(C.dim, `  (ctrl-c while geoclaw is thinking cancels the reply; ctrl-c at the prompt quits)`));
   console.log('');
 }
 
@@ -506,6 +540,8 @@ async function repl() {
 
   const history = [{ role: 'system', content: SYSTEM_PROMPT }];
   let voiceOn = process.argv.slice(2).includes('--voice');
+  let pendingNote = '';   // text added via /btw to be folded into the next user message
+  let turnInFlight = false;
 
   const ctx = {
     rl,
@@ -519,11 +555,58 @@ async function repl() {
   const PROMPT = `${col(C.cyan, '▌')} ${col(C.bold, 'you')} ${col(C.dim, '›')} `;
   const MARKER = `${col(C.orange, '▌')} ${col(C.bold, 'geoclaw')} ${col(C.dim, '›')} `;
 
+  // Ctrl-C behaviour: during a turn, abort the HTTP request and drop back to prompt.
+  // At the prompt (no turn in flight), quit cleanly.
+  rl.on('SIGINT', () => {
+    // During a turn: abort the HTTP request; the turn's catch prints "(cancelled)".
+    if (turnInFlight && abortActive('cancelled by user')) return;
+    // At the prompt (or if no request is in flight): quit cleanly.
+    console.log(col(C.dim, '\n  bye.'));
+    rl.close();
+  });
+
+  // Run one conversation turn — returns when done, aborted, or errored.
+  const runTurn = async (userText) => {
+    history.push({ role: 'user', content: userText });
+    ctx.workspace = memory.activeWorkspace();
+    history[0] = { role: 'system', content: buildSystemPrompt(userText) };
+
+    turnInFlight = true;
+    const t0 = Date.now();
+    try {
+      let reply = '', usage = null;
+      if (TOOLS_ON) ({ reply, usage } = await runTurnWithTools(trimHistory(history), ctx, MARKER));
+      else          ({ reply, usage } = await runTurnStreaming(trimHistory(history), MARKER));
+
+      const secs = ((Date.now() - t0) / 1000).toFixed(1);
+      const tokens = usage
+        ? (usage.total_tokens ?? ((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0)) ?? 0)
+        : 0;
+      const stats = tokens ? `${tokens} tokens · ${secs}s` : `${secs}s`;
+      console.log(col(C.dim, `  ${stats}`));
+
+      if (reply) history.push({ role: 'assistant', content: reply });
+      if (voiceOn && reply) tts.speak(reply, { silent: true }).catch(() => {});
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      if (/cancelled by user/i.test(msg)) {
+        console.log(col(C.dim, '\n  (cancelled — use /retry to re-run, or just type a new message)'));
+      } else {
+        console.log(`  ${col(C.red, '✗')} ${msg}`);
+      }
+      // On error/abort we drop the failed user turn so /retry or a fresh message works.
+      if (history[history.length - 1]?.role === 'user') history.pop();
+    } finally {
+      turnInFlight = false;
+    }
+  };
+
   const ask = () => {
     rl.question(PROMPT, async (line) => {
       const text = line.trim();
       if (!text) return ask();
 
+      // ── Meta commands ─────────────────────────────────────────────────────
       if (text === '/exit' || text === '/quit') {
         console.log(col(C.dim, '  bye.'));
         rl.close();
@@ -531,6 +614,7 @@ async function repl() {
       }
       if (text === '/clear') {
         history.length = 1;
+        pendingNote = '';
         console.log(col(C.dim, '  (history cleared)'));
         console.log('');
         return ask();
@@ -543,6 +627,19 @@ async function repl() {
         console.log('');
         return ask();
       }
+      if (text === '/history') {
+        const userCount      = history.filter(m => m.role === 'user').length;
+        const assistantCount = history.filter(m => m.role === 'assistant').length;
+        const toolCount      = history.filter(m => m.role === 'tool').length;
+        const charCount      = history.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
+        const tokEst         = Math.round(charCount / 4);  // rough
+        console.log('');
+        console.log(col(C.dim, `  messages: ${history.length} (${userCount} user, ${assistantCount} assistant, ${toolCount} tool)`));
+        console.log(col(C.dim, `  ~${tokEst.toLocaleString()} tokens in context  ·  limit is ${MAX_HISTORY} messages`));
+        if (pendingNote) console.log(col(C.dim, `  pending btw: ${pendingNote.slice(0, 120)}${pendingNote.length > 120 ? '…' : ''}`));
+        console.log('');
+        return ask();
+      }
       if (text.startsWith('/voice')) {
         const mode = text.split(/\s+/)[1];
         if (mode === 'on')       { voiceOn = true;  console.log(col(C.dim, '  (voice on)')); }
@@ -551,35 +648,76 @@ async function repl() {
         console.log('');
         return ask();
       }
-
-      history.push({ role: 'user', content: text });
-      // Refresh system prompt with latest memory context + active workspace
-      ctx.workspace = memory.activeWorkspace();
-      history[0] = { role: 'system', content: buildSystemPrompt(text) };
-
-      const t0 = Date.now();
-      let reply = '', usage = null;
-      try {
-        if (TOOLS_ON) {
-          ({ reply, usage } = await runTurnWithTools(trimHistory(history), ctx, MARKER));
+      if (text.startsWith('/btw')) {
+        const note = text.slice(4).trim();
+        if (!note) {
+          if (pendingNote) { console.log(col(C.dim, `  (pending btw: ${pendingNote})`)); }
+          else             { console.log(col(C.dim, '  (usage: /btw <text to fold into the next message>)')); }
         } else {
-          ({ reply, usage } = await runTurnStreaming(trimHistory(history), MARKER));
+          pendingNote = pendingNote ? pendingNote + '\n' + note : note;
+          console.log(col(C.dim, `  (noted — will be added to your next message)`));
         }
-
-        const secs = ((Date.now() - t0) / 1000).toFixed(1);
-        const tokens = usage
-          ? (usage.total_tokens ?? ((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0)) ?? 0)
-          : 0;
-        const stats = tokens ? `${tokens} tokens · ${secs}s` : `${secs}s`;
-        console.log(col(C.dim, `  ${stats}`));
-
-        if (reply) history.push({ role: 'assistant', content: reply });
-        if (voiceOn && reply) tts.speak(reply, { silent: true }).catch(() => {});
-      } catch (err) {
-        console.log(`  ${col(C.red, '✗')} ${err.message}`);
-        history.pop();  // drop the failed user turn
+        console.log('');
+        return ask();
+      }
+      if (text === '/undo') {
+        let popped = 0;
+        // Drop trailing tool messages, then assistant, then user.
+        while (history.length > 1 && history[history.length - 1].role !== 'user') { history.pop(); popped++; }
+        if (history.length > 1 && history[history.length - 1].role === 'user')   { history.pop(); popped++; }
+        console.log(col(C.dim, popped ? `  (undid ${popped} message${popped === 1 ? '' : 's'})` : '  (nothing to undo)'));
+        console.log('');
+        return ask();
+      }
+      if (text === '/retry') {
+        // Find the last user message, drop everything after it, re-run.
+        let lastUserIdx = -1;
+        for (let i = history.length - 1; i >= 0; i--) {
+          if (history[i].role === 'user') { lastUserIdx = i; break; }
+        }
+        if (lastUserIdx < 0) { console.log(col(C.dim, '  (no previous turn to retry)')); console.log(''); return ask(); }
+        const lastUser = history[lastUserIdx].content;
+        history.splice(lastUserIdx);  // drop that user + everything after
+        console.log(col(C.dim, `  (retrying: ${lastUser.slice(0, 80)}${lastUser.length > 80 ? '…' : ''})`));
+        await runTurn(lastUser);
+        console.log('');
+        return ask();
+      }
+      if (text.startsWith('/tool')) {
+        const rest = text.slice(5).trim();
+        if (!rest) {
+          console.log(col(C.dim, '  (usage: /tool <name> [json-args]  — e.g. /tool recall {"query":"hebrew"})'));
+          console.log('');
+          return ask();
+        }
+        const spaceIdx = rest.indexOf(' ');
+        const name     = spaceIdx < 0 ? rest : rest.slice(0, spaceIdx);
+        const argsRaw  = spaceIdx < 0 ? ''   : rest.slice(spaceIdx + 1).trim();
+        let args = {};
+        if (argsRaw) {
+          try { args = JSON.parse(argsRaw); }
+          catch { console.log(`  ${col(C.red, '✗')} bad JSON for tool args: ${argsRaw.slice(0, 80)}`); console.log(''); return ask(); }
+        }
+        console.log(`  ${col(C.violet, '⚙')} ${col(C.bold, name)} ${col(C.dim, JSON.stringify(args))}`);
+        try {
+          const result = await agent.callTool(name, args, ctx);
+          const okSym = result && result.ok ? col(C.green, '✓') : col(C.red, '✗');
+          console.log(`    ${okSym} ${col(C.dim, shortenJSON(result, 200))}`);
+        } catch (e) {
+          console.log(`  ${col(C.red, '✗')} ${e.message}`);
+        }
+        console.log('');
+        return ask();
       }
 
+      // ── Real user message ─────────────────────────────────────────────────
+      let userText = text;
+      if (pendingNote) {
+        userText = `[btw: ${pendingNote}]\n\n${text}`;
+        pendingNote = '';
+      }
+
+      await runTurn(userText);
       console.log('');
       ask();
     });

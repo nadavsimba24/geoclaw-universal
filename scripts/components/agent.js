@@ -262,6 +262,12 @@ async function callTool(name, args, ctx) {
     }
   };
 
+  // ask_user waits for the human — no timeout, users take as long as they take.
+  if (name === 'ask_user') {
+    try { return await runner(); }
+    catch (e) { return { ok: false, error: e.message }; }
+  }
+
   try {
     return await withTimeout(runner(), TOOL_TIMEOUT_MS, `tool ${name}`);
   } catch (e) {
