@@ -65,7 +65,12 @@ function printHelp() {
 Usage: geoclaw <command> [options]
 
 Commands:
-  chat            Talk to your configured LLM (interactive)
+  chat            Talk to your configured LLM (with knowledge base context)
+  agent <goal>    Autonomous agent — plans and executes a goal using tools
+  remember <text> Save a fact to the knowledge base
+  recall <query>  Search the knowledge base
+  ingest <file>   Ingest a document (.txt/.md/.pdf/.csv) into the knowledge base
+  memory          Manage the knowledge base (list, forget, stats, export, clear)
   start           Start Geoclaw agent platform
   setup           Interactive setup wizard
   doctor          Check system requirements & diagnose issues
@@ -401,6 +406,35 @@ async function main() {
 
     case 'chat':
       await runScript('components/chat.js', args.slice(1));
+      break;
+
+    case 'agent':
+      if (args.length < 2) {
+        console.log('Usage: geoclaw agent "your goal"');
+        console.log('Example: geoclaw agent "summarize my Monday.com boards"');
+        break;
+      }
+      await runScript('components/agent.js', args.slice(1));
+      break;
+
+    case 'remember':
+      await runScript('components/memory.js', ['remember', ...args.slice(1)]);
+      break;
+
+    case 'recall':
+      await runScript('components/memory.js', ['recall', ...args.slice(1)]);
+      break;
+
+    case 'forget':
+      await runScript('components/memory.js', ['forget', ...args.slice(1)]);
+      break;
+
+    case 'memory':
+      await runScript('components/memory.js', args.slice(1));
+      break;
+
+    case 'ingest':
+      await runScript('components/ingest.js', args.slice(1));
       break;
 
     case 'doctor':

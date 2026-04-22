@@ -11,6 +11,8 @@ require('dotenv').config({
   path: path.join(process.env.GEOCLAW_DIR || path.join(__dirname, '..', '..'), '.env'),
 });
 
+const memory = require('./memory.js');
+
 const PROVIDER = (process.env.GEOCLAW_MODEL_PROVIDER || 'deepseek').toLowerCase();
 const MODEL    = process.env.GEOCLAW_MODEL_NAME || 'deepseek-chat';
 const API_KEY  = process.env.GEOCLAW_MODEL_API_KEY || '';
@@ -18,8 +20,16 @@ const BASE_URL = process.env.GEOCLAW_MODEL_BASE_URL || '';
 
 const SYSTEM_PROMPT = `You are Geoclaw, a friendly and capable AI assistant.
 You have access to integrations the user has enabled: Monday.com, n8n, Telegram, MCP tools, memory, and more.
-If the user asks you to DO something that requires one of those integrations, tell them the exact command to run (e.g. 'geoclaw monday boards').
-Otherwise, just help them normally — answer questions, explain, write code, think.`;
+If the user asks you to DO something that requires one of those integrations, tell them the exact command to run (e.g. 'geoclaw monday boards', 'geoclaw agent "your goal"').
+When context from the knowledge base is provided below, USE it — it contains relevant facts the user previously saved.`;
+
+// Build an ephemeral system prompt with relevant memories injected for this turn
+function buildSystemPrompt(userMessage) {
+  const hits = memory.recall(userMessage, 5);
+  if (hits.length === 0) return SYSTEM_PROMPT;
+  const facts = hits.map(h => `- ${h.text}` + (h.source ? ` (source: ${h.source})` : '')).join('\n');
+  return `${SYSTEM_PROMPT}\n\n## Relevant knowledge base context:\n${facts}`;
+}
 
 // ── Generic HTTP helpers ──────────────────────────────────────────────────────
 
@@ -168,6 +178,9 @@ async function repl() {
 
       history.push({ role: 'user', content: text });
       process.stdout.write('\x1b[32mgeoclaw ›\x1b[0m thinking...\r');
+
+      // Update system message with memories relevant to this turn
+      history[0] = { role: 'system', content: buildSystemPrompt(text) };
 
       try {
         const { reply, usage } = await dispatch(history);
