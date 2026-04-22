@@ -410,32 +410,43 @@ async function handleAddMemory(args) {
 }
 
 async function handleMondayCreateItem(args) {
-  const { boardId, itemName, columnValues = {} } = args;
-  
+  const { boardId, itemName, columnValues = null } = args;
+
   console.error(`   Creating Monday.com item: "${itemName}"`);
   console.error(`   Board ID: ${boardId}`);
-  
+
   if (process.env.GEOCLAW_MONDAY_ENABLED !== "true") {
     return {
       success: false,
       message: "Monday.com integration is not enabled",
-      note: "Enable Monday.com integration in Geoclaw configuration to use this tool."
+      note: "Run: geoclaw setup — and enable Monday.com."
     };
   }
-  
-  // Mock response
-  const itemId = `monday_${Date.now()}`;
-  
-  return {
-    success: true,
-    message: "Item created on Monday.com",
-    itemId,
-    boardId,
-    itemName,
-    columnValues,
-    url: `https://${process.env.GEOCLAW_MONDAY_SUBDOMAIN || "your"}.monday.com/boards/${boardId}/pulses/${itemId}`,
-    note: "Item created on Monday.com. It will sync with Geoclaw tasks if configured."
-  };
+
+  const monday = require('./monday-integration.js');
+  try {
+    const item = await monday.createItem(
+      boardId || process.env.GEOCLAW_MONDAY_DEFAULT_BOARD_ID,
+      itemName,
+      columnValues
+    );
+    return {
+      success: true,
+      message: "Item created on Monday.com",
+      itemId: item.id,
+      boardId,
+      itemName: item.name,
+      columnValues,
+      url: `https://${process.env.GEOCLAW_MONDAY_SUBDOMAIN || "your"}.monday.com/boards/${boardId}/pulses/${item.id}`,
+      note: "Real item created via Monday.com GraphQL API.",
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: `Monday.com API error: ${err.message}`,
+      note: "Verify GEOCLAW_MONDAY_API_TOKEN and board ID."
+    };
+  }
 }
 
 async function handleSalesforceQuery(args) {
@@ -557,3 +568,36 @@ async function handleGetCapabilities(args) {
     // MCP
     mcp: {
       server: process.env.GEOCLAW_MCP_SERVER_ENABLED === "true",
+      mcporter: process.env.GEOCLAW_MCPORTER_ENABLED === "true",
+      description: "Model Context Protocol server and discovery"
+    },
+
+    // Automation
+    automation: {
+      n8n: process.env.GEOCLAW_N8N_ENABLED === "true",
+      webScraping: process.env.GEOCLAW_WEB_SCRAPING_ENABLED === "true",
+      workflow: process.env.GEOCLAW_WORKFLOW_ENABLED === "true",
+      description: "Workflow automation and web scraping"
+    },
+
+    // Geospatial
+    geospatial: {
+      enabled: process.env.GEOCLAW_GEOSPATIAL_ENABLED === "true",
+      qgis: process.env.GEOCLAW_QGIS_ENABLED === "true",
+      description: "QGIS / PostGIS spatial analysis"
+    },
+  };
+
+  return capabilities;
+}
+
+// ── Server bootstrap ──────────────────────────────────────────────────────────
+
+(async () => {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("✅ Geoclaw MCP server is running (stdio transport)");
+})().catch((err) => {
+  console.error("❌ MCP server failed:", err);
+  process.exit(1);
+});
