@@ -114,7 +114,7 @@ q('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') clos
 
 // ── View switching ───────────────────────────────────────────────────────────
 
-const VIEWS = ['chat', 'inbox', 'agents', 'autopilots', 'files', 'design', 'settings'];
+const VIEWS = ['chat', 'inbox', 'agents', 'autopilots', 'files', 'skills', 'design', 'settings'];
 function showView(name) {
   for (const v of VIEWS) {
     const section = q(`.view[data-view="${v}"]`);
@@ -128,6 +128,7 @@ function showView(name) {
   if (name === 'agents')     loadAgents();
   if (name === 'autopilots') loadAutopilots();
   if (name === 'files')      loadFiles();
+  if (name === 'skills')     loadSkills();
   if (name === 'design')     loadDesign();
   if (name === 'settings')   loadSettings();
 }
@@ -638,6 +639,163 @@ q('#design-init').addEventListener('click', () => {
     } }, 'Create'),
   );
   openModal('Create DESIGN.md', form, actions);
+});
+
+// ── Skills ───────────────────────────────────────────────────────────────────
+
+const SKILL_BUNDLE_PRESETS = [
+  { slug: 'freelancer-accountant', label: 'Freelancer accountant (tax + invoicing + VAT)' },
+  { slug: 'restaurant-owner',      label: 'Restaurant owner (food + suppliers + staff)' },
+  { slug: 'small-law-firm',        label: 'Small law firm (legal docs + compliance)' },
+  { slug: 'startup-founder',       label: 'Startup founder (growth + legal + finance)' },
+];
+const SKILL_REPO_PRESETS = [
+  { src: 'skills-il/tax-and-finance',     label: 'Israeli tax, invoicing, VAT' },
+  { src: 'skills-il/accounting',          label: 'Israeli accounting & bookkeeping' },
+  { src: 'skills-il/localization',        label: 'Hebrew, RTL, translation' },
+  { src: 'skills-il/government-services', label: 'Israeli gov APIs & digital services' },
+  { src: 'skills-il/security-compliance', label: 'Privacy, GDPR, regulation' },
+  { src: 'skills-il/legal-tech',          label: 'Legal tech' },
+  { src: 'skills-il/communication',       label: 'SMS, email, customer comms' },
+  { src: 'skills-il/health-services',     label: 'Health services' },
+  { src: 'skills-il/education',           label: 'Education' },
+  { src: 'skills-il/developer-tools',     label: 'Developer utilities' },
+];
+
+async function loadSkills() {
+  try {
+    const { skills = [] } = await api('GET', '/api/skills');
+    const list = q('#skills-list');
+    list.innerHTML = '';
+    if (!skills.length) {
+      list.appendChild(el('div', { class: 'empty' }, 'No skills installed yet. Click "+ Install" for ready-made packs or "+ Create" to make your own.'));
+      return;
+    }
+    for (const s of skills) {
+      list.appendChild(el('div', { class: 'card' },
+        el('div', { class: 'card-avatar' }, '🧩'),
+        el('div', {},
+          el('div', { class: 'card-title' }, s.name),
+          s.description ? el('div', { class: 'card-sub' }, s.description) : null,
+          el('div', { class: 'card-meta' },
+            `scope: ${s.scope}` +
+            (s.hasScripts ? ' · scripts' : '') +
+            (s.hasReferences ? ' · references' : '')
+          ),
+        ),
+        el('div', { class: 'card-actions' },
+          el('button', { onclick: () => openSkillDrawer(s.name) }, 'View'),
+          el('button', { class: 'danger', onclick: () => removeSkillConfirm(s.name) }, 'Remove'),
+        ),
+      ));
+    }
+  } catch (e) { toast(e.message, 'error'); }
+}
+q('#skills-refresh').addEventListener('click', loadSkills);
+
+async function openSkillDrawer(name) {
+  try {
+    const { name: n, body } = await api('GET', `/api/skills/show/${encodeURIComponent(name)}`);
+    q('#skill-drawer-title').textContent = n;
+    q('#skill-drawer-sub').textContent = `skill · ${body.length} bytes`;
+    q('#skill-drawer-body').textContent = body;
+    q('#skill-drawer').hidden = false;
+  } catch (e) { toast(e.message, 'error'); }
+}
+q('#skill-drawer-close').addEventListener('click', () => { q('#skill-drawer').hidden = true; });
+
+async function removeSkillConfirm(name) {
+  if (!confirm(`Remove skill "${name}"?`)) return;
+  try { await api('DELETE', `/api/skills/${encodeURIComponent(name)}`); loadSkills(); toast('removed', 'success'); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+q('#skills-install').addEventListener('click', () => {
+  const form = el('div', {},
+    el('label', {}, 'Bundle (all-in-one pack)',
+      el('select', { id: 'sk-bundle' },
+        el('option', { value: '' }, '— skip —'),
+        ...SKILL_BUNDLE_PRESETS.map(b => el('option', { value: b.slug }, b.label)),
+      ),
+    ),
+    el('label', {}, 'Or single category repo',
+      el('select', { id: 'sk-repo' },
+        el('option', { value: '' }, '— skip —'),
+        ...SKILL_REPO_PRESETS.map(r => el('option', { value: r.src }, `${r.src} — ${r.label}`)),
+      ),
+    ),
+    el('label', {}, 'Or custom source (owner/repo, URL, or bare name)',
+      el('input', { id: 'sk-custom', placeholder: 'e.g. vercel-labs/agent-skills' }),
+    ),
+    el('div', { class: 'card-meta' }, 'Installs use npx skills-il · first run may take ~30s.'),
+  );
+  const actions = el('div', { class: 'modal-actions' },
+    el('button', { onclick: closeModal }, 'Cancel'),
+    el('button', { class: 'primary', onclick: async () => {
+      const bundle = q('#sk-bundle').value;
+      const repo   = q('#sk-repo').value;
+      const custom = q('#sk-custom').value.trim();
+      if (!bundle && !repo && !custom) { toast('pick one option', 'error'); return; }
+      closeModal();
+      toast('installing… (this can take ~30s)', 'info', 4000);
+      try {
+        if (bundle) await api('POST', '/api/skills/install-bundle', { slug: bundle });
+        else        await api('POST', '/api/skills/add', { source: repo || custom });
+        toast('installed', 'success');
+        loadSkills();
+      } catch (e) { toast(`install failed: ${e.message}`, 'error', 8000); }
+    } }, 'Install'),
+  );
+  openModal('Install skills', form, actions);
+});
+
+q('#skills-create').addEventListener('click', () => {
+  const form = el('div', {},
+    el('label', {}, 'What should this skill do?',
+      el('textarea', { id: 'sc-intent', rows: '3', placeholder: 'e.g. "Generate a compliant Israeli VAT invoice from a list of line items"' }),
+    ),
+    el('label', {}, 'Short name (kebab-case, optional)',
+      el('input', { id: 'sc-name', placeholder: 'vat-invoice' }),
+    ),
+    el('label', {}, 'Example user phrases (| separated, optional)',
+      el('input', { id: 'sc-triggers', placeholder: 'חשבונית מס | generate invoice | send VAT receipt' }),
+    ),
+    el('label', {}, 'Expected output',
+      el('input', { id: 'sc-outputs', placeholder: 'e.g. "markdown table + PDF link"' }),
+    ),
+    el('label', {}, 'Scope',
+      el('select', { id: 'sc-scope' },
+        el('option', { value: 'global' }, 'global (all workspaces)'),
+        el('option', { value: 'project' }, 'project (./.geoclaw/skills)'),
+      ),
+    ),
+    el('div', { class: 'card-meta' }, ME && ME.hasKey ? 'The LLM will draft the SKILL.md for you.' : 'No API key — falling back to template. Set GEOCLAW_MODEL_API_KEY for LLM-drafted skills.'),
+  );
+  const actions = el('div', { class: 'modal-actions' },
+    el('button', { onclick: closeModal }, 'Cancel'),
+    el('button', { class: 'primary', onclick: async () => {
+      const intent = q('#sc-intent').value.trim();
+      if (!intent) { toast('intent is required', 'error'); return; }
+      const body = {
+        intent,
+        name: q('#sc-name').value.trim() || undefined,
+        description: intent,
+        triggers: q('#sc-triggers').value.split('|').map(s => s.trim()).filter(Boolean),
+        outputs: q('#sc-outputs').value.trim(),
+        scope: q('#sc-scope').value,
+        useLLM: !!(ME && ME.hasKey),
+      };
+      closeModal();
+      toast('drafting skill…', 'info', 3000);
+      try {
+        const r = await api('POST', '/api/skills/create', body);
+        toast(r.draftedByLLM ? 'skill drafted by LLM ✓' : 'skill created from template', 'success');
+        loadSkills();
+        setTimeout(() => openSkillDrawer(r.skill.name), 200);
+      } catch (e) { toast(e.message, 'error', 8000); }
+    } }, 'Create'),
+  );
+  openModal('Create a skill', form, actions);
 });
 
 // ── Settings ─────────────────────────────────────────────────────────────────

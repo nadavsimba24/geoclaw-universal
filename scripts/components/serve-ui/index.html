@@ -35,6 +35,9 @@
       <button class="nav-item" data-view="files">
         <span class="nav-icon">📁</span><span>Files</span>
       </button>
+      <button class="nav-item" data-view="skills">
+        <span class="nav-icon">🧩</span><span>Skills</span>
+      </button>
       <button class="nav-item" data-view="design">
         <span class="nav-icon">🎨</span><span>Design</span>
       </button>
@@ -143,6 +146,32 @@
       <p class="hint">Drop files here or click Upload. Supported: .txt, .md, .pdf, .docx, .xlsx.</p>
       <div class="list" id="files-list">
         <div class="empty">No files ingested yet.</div>
+      </div>
+    </section>
+
+    <!-- ── SKILLS ───────────────────────────────────────────────────────── -->
+    <section class="view" data-view="skills" hidden>
+      <header class="view-header">
+        <h1>Skills</h1>
+        <div class="view-actions">
+          <button id="skills-refresh">Refresh</button>
+          <button id="skills-install" title="Install from skills-il registry">+ Install</button>
+          <button id="skills-create" class="primary">+ Create</button>
+        </div>
+      </header>
+      <p class="hint">SKILL.md-format skills give Geoclaw domain expertise. Install from the <a href="https://github.com/skills-il" target="_blank" rel="noopener">skills-il</a> registry (Israeli tax, legal, accounting, government, localization) or create your own — Geoclaw sees them automatically in chat and agent runs.</p>
+      <div class="list" id="skills-list">
+        <div class="empty">No skills installed yet.</div>
+      </div>
+      <div class="drawer" id="skill-drawer" hidden>
+        <header class="drawer-header">
+          <div>
+            <div class="drawer-title" id="skill-drawer-title">skill</div>
+            <div class="drawer-sub" id="skill-drawer-sub"></div>
+          </div>
+          <button id="skill-drawer-close">×</button>
+        </header>
+        <pre class="log" id="skill-drawer-body"></pre>
       </div>
     </section>
 

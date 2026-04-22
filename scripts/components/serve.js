@@ -21,6 +21,7 @@ try {
 const memory  = require('./memory.js');
 const agent   = require('./agent.js');
 const design  = require('./design.js');
+const skills  = require('./skills.js');
 const { env } = require('./env.js');
 
 const PORT = parseInt(process.env.GEOCLAW_SERVE_PORT || '3737', 10);
@@ -328,6 +329,7 @@ const CHAT_TOOL_NAMES = new Set([
   'monday_list_boards', 'monday_get_board', 'monday_create_item',
   'send_telegram',
   'design_tokens', 'design_lint', 'design_diff', 'design_export', 'design_init', 'design_suggest',
+  'read_skill',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
@@ -351,7 +353,8 @@ function buildSystemPrompt() {
     } catch {}
     return null;
   })();
-  return `${SYSTEM_PROMPT}\n\nActive workspace: ${ws}${designSummary ? `\n${designSummary}` : ''}`;
+  const skillsManifest = (() => { try { return skills.buildSkillsManifest(); } catch { return ''; } })();
+  return `${SYSTEM_PROMPT}\n\nActive workspace: ${ws}${designSummary ? `\n${designSummary}` : ''}${skillsManifest}`;
 }
 
 async function handleChatSSE(req, res, body) {
@@ -591,6 +594,75 @@ async function handle(req, res) {
   if (req.method === 'POST' && pathname === '/api/inbox/clear') {
     saveJSON(INBOX_FILE, []);
     return sendJSON(res, 200, { ok: true });
+  }
+
+  // ── /api/skills ──────────────────────────────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/skills') {
+    return sendJSON(res, 200, { ok: true, skills: skills.listSkills({}) });
+  }
+  if (req.method === 'GET' && pathname.startsWith('/api/skills/show/')) {
+    const name = decodeURIComponent(pathname.slice('/api/skills/show/'.length));
+    const body = skills.readSkillBody(name);
+    if (body == null) return sendJSON(res, 404, { ok: false, error: 'not found' });
+    return sendJSON(res, 200, { ok: true, name, body });
+  }
+  if (req.method === 'POST' && pathname === '/api/skills/create') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    try {
+      let md = null;
+      if (body.useLLM && API_KEY) {
+        try {
+          md = await skills.llmDraft({
+            intent: body.intent || body.description || '',
+            triggers: body.triggers || [],
+            outputs: body.outputs || '',
+          });
+          const v = skills.validateSkill(md);
+          if (!v.ok) md = null;
+        } catch (e) {
+          inboxPush({ kind: 'error', title: 'skill LLM draft failed', body: e.message });
+          md = null;
+        }
+      }
+      const created = await skills.createSkill({
+        name: body.name || skills.slugify(body.intent || 'new-skill'),
+        description: body.description || body.intent || '',
+        scope: body.scope || 'global',
+        body: md || undefined,
+        overwrite: !!body.overwrite,
+      });
+      inboxPush({ kind: 'done', title: `skill created: ${created.name}`, body: created.file });
+      return sendJSON(res, 200, { ok: true, skill: created, draftedByLLM: !!md });
+    } catch (e) {
+      return sendJSON(res, 400, { ok: false, error: e.message });
+    }
+  }
+  if (req.method === 'POST' && pathname === '/api/skills/add') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.source) return sendJSON(res, 400, { ok: false, error: 'missing source' });
+    try {
+      const r = await skills.addFromRegistry(body.source, { scope: body.scope || 'global', agents: body.agents || ['claude-code'] });
+      inboxPush({ kind: 'done', title: `skills installed: ${body.source}`, body: (r.stdout || '').slice(0, 200) });
+      return sendJSON(res, 200, { ok: true, stdout: r.stdout });
+    } catch (e) {
+      return sendJSON(res, 500, { ok: false, error: e.message });
+    }
+  }
+  if (req.method === 'POST' && pathname === '/api/skills/install-bundle') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.slug) return sendJSON(res, 400, { ok: false, error: 'missing slug' });
+    try {
+      const r = await skills.installBundle(body.slug, { scope: body.scope || 'global' });
+      inboxPush({ kind: 'done', title: `bundle installed: ${body.slug}`, body: (r.stdout || '').slice(0, 200) });
+      return sendJSON(res, 200, { ok: true, stdout: r.stdout });
+    } catch (e) {
+      return sendJSON(res, 500, { ok: false, error: e.message });
+    }
+  }
+  if (req.method === 'DELETE' && pathname.startsWith('/api/skills/')) {
+    const name = decodeURIComponent(pathname.slice('/api/skills/'.length));
+    try { return sendJSON(res, 200, skills.removeSkill(name)); }
+    catch (e) { return sendJSON(res, 404, { ok: false, error: e.message }); }
   }
 
   // ── /api/workspaces ──────────────────────────────────────────────────────

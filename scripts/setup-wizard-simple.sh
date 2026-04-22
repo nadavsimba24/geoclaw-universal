@@ -410,6 +410,39 @@ setup_skills_tasks() {
     set_env GEOCLAW_SKILLS_SYNC_ENABLED false
   fi
 
+  # skills-il: curated SKILL.md packs for the Israeli market (tax, accounting, gov, legal, Hebrew)
+  echo ""
+  echo "Geoclaw integrates with skills-il (github.com/skills-il): curated skill"
+  echo "packs for Israeli tax, invoicing, accounting, government APIs, Hebrew/RTL,"
+  echo "legal tech, and more. Packs install into ~/.geoclaw/skills/ and are"
+  echo "auto-loaded by chat and agent runs."
+  if ask_yes_no "Install a skills-il bundle now (recommended for accounting/legal/gov workflows)?" "n"; then
+    echo ""
+    echo "  Available bundles:"
+    echo "    1) freelancer-accountant   (tax + invoicing + VAT — best for accounting firms)"
+    echo "    2) small-law-firm          (legal docs + compliance)"
+    echo "    3) restaurant-owner        (food + suppliers + staff)"
+    echo "    4) startup-founder         (growth + legal + finance)"
+    echo "    5) skip — I'll pick later with: geoclaw skills bundles"
+    printf "  Pick [1-5]: "
+    read bundle_choice
+    case "$bundle_choice" in
+      1) bundle_slug="freelancer-accountant" ;;
+      2) bundle_slug="small-law-firm" ;;
+      3) bundle_slug="restaurant-owner" ;;
+      4) bundle_slug="startup-founder" ;;
+      *) bundle_slug="" ;;
+    esac
+    if [ -n "$bundle_slug" ]; then
+      echo "  Installing $bundle_slug via npx skills-il (first run may take ~30s)..."
+      if npx -y skills-il add-bundle "$bundle_slug" -g -y 2>&1 | tail -20; then
+        print_success "Bundle $bundle_slug installed"
+      else
+        echo "  ⚠  Bundle install failed — you can retry with: geoclaw skills install-bundle $bundle_slug"
+      fi
+    fi
+  fi
+
   if ask_yes_no "Enable Vibe Kanban (visual task management)?" "n"; then
     set_env GEOCLAW_VIBE_KANBAN_ENABLED true
     print_success "Vibe Kanban enabled"

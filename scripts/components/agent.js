@@ -15,6 +15,7 @@ try {
 
 const memory = require('./memory.js');
 const tts    = require('./tts.js');
+const skills = require('./skills.js');
 const { env } = require('./env.js');
 
 const PROVIDER = env('GEOCLAW_MODEL_PROVIDER', 'deepseek').toLowerCase();
@@ -246,6 +247,21 @@ const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'read_skill',
+      description:
+        'Read the full body of an installed skill (SKILL.md) by name. ' +
+        'Call this BEFORE executing a task when a skill from the manifest matches the user request — ' +
+        'the skill body contains precise step-by-step instructions, output format, and edge cases you must follow.',
+      parameters: {
+        type: 'object',
+        properties: { name: { type: 'string', description: 'Skill name as listed in the skills manifest.' } },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'finish',
       description: 'Declare the goal complete with a short summary for the user.',
       parameters: {
@@ -371,6 +387,11 @@ async function callTool(name, args, ctx) {
         }
         const reply = await askUser(args.question, ctx.rl);
         return { ok: true, answer: reply };
+      }
+      case 'read_skill': {
+        const body = skills.readSkillBody(args.name);
+        if (!body) return { ok: false, error: `no skill named "${args.name}". Use the skill manifest in the system prompt for available names.` };
+        return { ok: true, name: args.name, body };
       }
       case 'finish': {
         ctx.done = true;
@@ -547,8 +568,9 @@ async function runAgent(goal, opts = {}) {
 
   const ctx = { rl, done: false, summary: null, workspace, depth, interactive };
 
+  const skillsManifest = skills.buildSkillsManifest();
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT + `\n\nActive workspace: ${workspace}` },
+    { role: 'system', content: SYSTEM_PROMPT + `\n\nActive workspace: ${workspace}` + skillsManifest },
     { role: 'user',   content: `Goal: ${goal}` },
   ];
 

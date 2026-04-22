@@ -81,6 +81,7 @@ const CHAT_TOOL_NAMES = new Set([
   'send_telegram', 'ask_user',
   'design_tokens', 'design_lint', 'design_diff', 'design_export',
   'design_init', 'design_suggest',
+  'read_skill',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
@@ -116,7 +117,8 @@ const SYSTEM_PROMPT = TOOLS_ON ? SYSTEM_PROMPT_TOOLS : SYSTEM_PROMPT_NO_TOOLS;
 function buildSystemPrompt(userMessage) {
   const ws = memory.activeWorkspace();
   const hits = memory.recall(userMessage, 5);
-  const base = `${SYSTEM_PROMPT}\n\nActive workspace: ${ws}`;
+  const skillsManifest = (() => { try { return require('./skills.js').buildSkillsManifest(); } catch { return ''; } })();
+  const base = `${SYSTEM_PROMPT}\n\nActive workspace: ${ws}${skillsManifest}`;
   if (hits.length === 0) return base;
   const facts = hits.map(h => `- ${h.text}` + (h.source ? ` (source: ${h.source})` : '')).join('\n');
   return `${base}\n\n## Relevant knowledge base context:\n${facts}`;

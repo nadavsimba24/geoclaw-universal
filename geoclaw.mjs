@@ -75,6 +75,7 @@ Commands:
   bot             Start the Telegram bot (needs GEOCLAW_TELEGRAM_BOT_TOKEN)
   say <text>      Speak text out loud (text-to-speech)
   memory          Manage the knowledge base (list, forget, stats, export, clear)
+  skills          Manage SKILL.md skills (list, add, bundles, create — from skills-il)
   workspace       Manage workspaces (list, create, use, current, delete)
   start           Start Geoclaw agent platform
   setup           Interactive setup wizard
@@ -423,6 +424,11 @@ async function main() {
 
     case 'monday':
       await runScript('components/monday-integration.js', args.slice(1));
+      break;
+
+    case 'skills':
+    case 'skill':
+      await runScript('components/skills.js', args.slice(1));
       break;
 
     case 'chat':
