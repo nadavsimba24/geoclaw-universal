@@ -71,6 +71,7 @@ Commands:
   recall <query>  Search the knowledge base
   ingest <file>   Ingest a document (.txt/.md/.pdf/.docx/.xlsx/.csv) into the knowledge base
   upload          Start the local web UI for managing the knowledge base
+  serve           Start the Geoclaw web dashboard (chat, agents, autopilots, files)
   bot             Start the Telegram bot (needs GEOCLAW_TELEGRAM_BOT_TOKEN)
   say <text>      Speak text out loud (text-to-speech)
   memory          Manage the knowledge base (list, forget, stats, export, clear)
@@ -469,6 +470,12 @@ async function main() {
     case 'upload':
     case 'web':
       await runScript('components/web-upload.js', args.slice(1));
+      break;
+
+    case 'serve':
+    case 'ui':
+    case 'dashboard':
+      await runScript('components/serve.js', args.slice(1));
       break;
 
     case 'bot':

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Geoclaw</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">✳</div>
+      <div class="brand-text">
+        <div class="brand-name">Geoclaw</div>
+        <div class="brand-sub" id="brand-sub">universal agent</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-view="chat">
+        <span class="nav-icon">💬</span><span>Chat</span>
+      </button>
+      <button class="nav-item" data-view="inbox">
+        <span class="nav-icon">📥</span><span>Inbox</span>
+        <span class="badge" id="inbox-badge" hidden></span>
+      </button>
+      <button class="nav-item" data-view="agents">
+        <span class="nav-icon">🤖</span><span>Agents</span>
+      </button>
+      <button class="nav-item" data-view="autopilots">
+        <span class="nav-icon">🎯</span><span>Autopilots</span>
+      </button>
+      <button class="nav-item" data-view="files">
+        <span class="nav-icon">📁</span><span>Files</span>
+      </button>
+      <button class="nav-item" data-view="design">
+        <span class="nav-icon">🎨</span><span>Design</span>
+      </button>
+      <button class="nav-item" data-view="settings">
+        <span class="nav-icon">⚙️</span><span>Settings</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="provider-chip" id="provider-chip">deepseek · deepseek-chat</div>
+      <div class="workspace-chip" id="workspace-chip">workspace: default</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ── CHAT ─────────────────────────────────────────────────────────── -->
+    <section class="view" data-view="chat" hidden>
+      <header class="view-header">
+        <h1>Chat</h1>
+        <div class="view-actions">
+          <button id="chat-clear">Clear</button>
+        </div>
+      </header>
+      <div class="chat-log" id="chat-log"></div>
+      <form class="chat-composer" id="chat-composer">
+        <textarea id="chat-input" placeholder="Ask anything, or say &quot;build me a dashboard for…&quot;" rows="1"></textarea>
+        <button type="submit" id="chat-send" class="primary">Send</button>
+      </form>
+    </section>
+
+    <!-- ── INBOX ────────────────────────────────────────────────────────── -->
+    <section class="view" data-view="inbox" hidden>
+      <header class="view-header">
+        <h1>Inbox</h1>
+        <div class="view-actions">
+          <button id="inbox-refresh">Refresh</button>
+          <button id="inbox-clear">Clear</button>
+        </div>
+      </header>
+      <div class="list" id="inbox-list">
+        <div class="empty">No activity yet. Run an agent or upload a file.</div>
+      </div>
+    </section>
+
+    <!-- ── AGENTS ───────────────────────────────────────────────────────── -->
+    <section class="view" data-view="agents" hidden>
+      <header class="view-header">
+        <h1>Agents</h1>
+        <div class="view-actions">
+          <button id="agents-refresh">Refresh</button>
+          <button id="agents-new" class="primary">+ New run</button>
+        </div>
+      </header>
+      <div class="list" id="agents-list">
+        <div class="empty">No agent runs yet.</div>
+      </div>
+      <div class="drawer" id="agent-drawer" hidden>
+        <header class="drawer-header">
+          <div>
+            <div class="drawer-title" id="agent-drawer-title">agent run</div>
+            <div class="drawer-sub" id="agent-drawer-sub"></div>
+          </div>
+          <button id="agent-drawer-close">×</button>
+        </header>
+        <pre class="log" id="agent-drawer-log"></pre>
+      </div>
+    </section>
+
+    <!-- ── AUTOPILOTS ───────────────────────────────────────────────────── -->
+    <section class="view" data-view="autopilots" hidden>
+      <header class="view-header">
+        <h1>Autopilots</h1>
+        <div class="view-actions">
+          <button id="autopilot-refresh">Refresh</button>
+          <button id="autopilot-new" class="primary">+ New autopilot</button>
+        </div>
+      </header>
+      <p class="hint">Autopilots run agents on a schedule. Use presets (@hourly, @daily, @weekly) or full cron syntax.</p>
+      <div class="list" id="autopilots-list">
+        <div class="empty">No autopilots yet.</div>
+      </div>
+    </section>
+
+    <!-- ── FILES ────────────────────────────────────────────────────────── -->
+    <section class="view" data-view="files" hidden>
+      <header class="view-header">
+        <h1>Files</h1>
+        <div class="view-actions">
+          <button id="files-refresh">Refresh</button>
+          <label class="primary file-pick">
+            + Upload
+            <input type="file" id="files-input" hidden multiple />
+          </label>
+        </div>
+      </header>
+      <p class="hint">Drop files here or click Upload. Supported: .txt, .md, .pdf, .docx, .xlsx.</p>
+      <div class="list" id="files-list">
+        <div class="empty">No files ingested yet.</div>
+      </div>
+    </section>
+
+    <!-- ── DESIGN ───────────────────────────────────────────────────────── -->
+    <section class="view" data-view="design" hidden>
+      <header class="view-header">
+        <h1>Design System</h1>
+        <div class="view-actions">
+          <button id="design-refresh">Refresh</button>
+          <button id="design-init" class="primary">+ Create DESIGN.md</button>
+        </div>
+      </header>
+      <p class="hint">A <code>DESIGN.md</code> in the current directory gives agents a consistent palette, typography, and components. The Geoclaw UI also reads it to theme itself.</p>
+      <div class="panel" id="design-panel">
+        <div class="empty">No DESIGN.md found. Click "+ Create DESIGN.md" to scaffold one.</div>
+      </div>
+    </section>
+
+    <!-- ── SETTINGS ─────────────────────────────────────────────────────── -->
+    <section class="view" data-view="settings" hidden>
+      <header class="view-header"><h1>Settings</h1></header>
+      <div class="panel">
+        <dl class="kv">
+          <dt>Provider</dt>      <dd id="s-provider">—</dd>
+          <dt>Model</dt>         <dd id="s-model">—</dd>
+          <dt>Workspace</dt>     <dd id="s-workspace">—</dd>
+          <dt>cwd</dt>           <dd id="s-cwd">—</dd>
+          <dt>Version</dt>       <dd id="s-version">—</dd>
+          <dt>API key set</dt>   <dd id="s-haskey">—</dd>
+        </dl>
+      </div>
+      <div class="panel">
+        <h2>Change workspace</h2>
+        <div class="inline-form">
+          <select id="ws-select"></select>
+          <button id="ws-use" class="primary">Use</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Modal (autopilot create, DESIGN.md init, new agent run) ────────── -->
+  <div class="modal-backdrop" id="modal" hidden>
+    <div class="modal">
+      <header class="modal-header">
+        <h2 id="modal-title">Title</h2>
+        <button id="modal-close">×</button>
+      </header>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Toasts ─────────────────────────────────────────────────────────── -->
+  <div class="toasts" id="toasts"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
