@@ -5,7 +5,7 @@
 import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { existsSync, copyFileSync, readFileSync } from 'fs';
+import { existsSync, copyFileSync, readFileSync, mkdirSync } from 'fs';
 import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -305,14 +305,24 @@ async function runUpdate() {
   }
   console.log(`   Latest    : main@${latestSha}`);
 
-  // Backup .env before the npm install replaces the install directory.
+  // Backup .env to the user's HOME (not inside the install dir, because
+  // `npm install -g` wipes the install dir wholesale). We keep a rolling
+  // timestamped copy plus a stable "latest" copy at ~/.geoclaw-env-backup
+  // that the user can rely on finding.
   const envFile = join(__dirname, '.env');
+  const backupDir = join(os.homedir(), '.geoclaw', 'env-backups');
   let envBackup = null;
   if (existsSync(envFile)) {
+    try { mkdirSync(backupDir, { recursive: true }); } catch {}
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    envBackup = `${envFile}.backup-${stamp}`;
+    envBackup = join(backupDir, `env-${stamp}.bak`);
     copyFileSync(envFile, envBackup);
-    console.log(`\n💾 Config backed up → ${envBackup}`);
+    // Also keep a stable "latest" copy so the user always knows where to look.
+    const latest = join(os.homedir(), '.geoclaw-env-backup');
+    copyFileSync(envFile, latest);
+    console.log(`\n💾 Config backed up →`);
+    console.log(`     timestamped: ${envBackup}`);
+    console.log(`     latest:      ${latest}`);
   }
 
   console.log(`\n📦 Installing from ${TARBALL}...`);
@@ -331,10 +341,13 @@ async function runUpdate() {
       const newEnvPath = join(newInstallDir, PACKAGE, '.env');
       if (existsSync(dirname(newEnvPath))) {
         copyFileSync(envBackup, newEnvPath);
-        console.log('✅ Configuration restored');
+        console.log('✅ Configuration restored from backup');
+      } else {
+        console.log(`⚠  New install dir not found at ${dirname(newEnvPath)}. Your backup is at:\n   ${envBackup}`);
       }
-    } catch {
-      console.log(`⚠️  Could not auto-restore config. Copy manually from:\n   ${envBackup}`);
+    } catch (e) {
+      console.log(`⚠  Could not auto-restore config: ${e.message}`);
+      console.log(`   Copy it manually from: ${envBackup}`);
     }
   }
 
