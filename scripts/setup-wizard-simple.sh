@@ -61,33 +61,50 @@ ask_yes_no() {
   done
 }
 
+# Strip carriage returns, newlines, and surrounding whitespace (handles Windows paste)
+_clean() {
+  local s="$1"
+  s="${s//$'\r'/}"
+  s="${s//$'\n'/}"
+  s="${s##[[:space:]]*}"
+  s="${s%%[[:space:]]*}"
+  echo "$s"
+}
+
 ask_input() {
   local prompt="$1"
   local default="${2:-}"
   local hint=""
   [[ -n "$default" ]] && hint=" [$default]"
   read -p "$(echo -e "${BLUE}?${NC} $prompt$hint: ")" -r
-  echo "${REPLY:-$default}"
+  _clean "${REPLY:-$default}"
 }
 
 ask_secret() {
   local prompt="$1"
   read -s -p "$(echo -e "${BLUE}?${NC} $prompt (hidden): ")" -r
   echo ""
-  echo "$REPLY"
+  _clean "$REPLY"
 }
 
-# Set or update an env variable. Quotes the value to handle spaces.
+# Set or update an env variable. No sed involved — write a fresh file from scratch,
+# which is bulletproof against special characters in the value.
 set_env() {
   local var="$1"
   local value="$2"
-  local quoted="\"$value\""
+  local tmp
+  tmp=$(mktemp)
 
-  if grep -q "^$var=" "$ENV_FILE" 2>/dev/null; then
-    _sedi "s|^$var=.*|$var=$quoted|" "$ENV_FILE"
-  else
-    echo "$var=$quoted" >> "$ENV_FILE"
+  # Keep every line EXCEPT an existing assignment of $var
+  if [[ -f "$ENV_FILE" ]]; then
+    grep -v "^${var}=" "$ENV_FILE" > "$tmp" 2>/dev/null || true
   fi
+
+  # Append the new assignment (double-quoted, with any " in value escaped)
+  local escaped="${value//\"/\\\"}"
+  printf '%s="%s"\n' "$var" "$escaped" >> "$tmp"
+
+  mv "$tmp" "$ENV_FILE"
 }
 
 ensure_env_file() {
