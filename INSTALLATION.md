@@ -285,7 +285,120 @@ Switch providers any time with `geoclaw setup`.
 
 ---
 
-## 9. Business-deployment patterns
+## 9. Voice (text-to-speech)
+
+Geoclaw can read replies out loud. Two backends:
+
+| Backend | Quality | Setup | Works offline |
+|---|---|---|---|
+| `system` (default) | basic | none — uses OS voices | ✅ |
+| `openai`           | excellent | needs an OpenAI API key | ❌ |
+
+### System voices (works out of the box)
+- macOS: built-in `say`
+- Windows: built-in PowerShell SAPI
+- WSL2: routes through Windows SAPI automatically
+- Linux: needs `espeak-ng` or `espeak` (or `festival`)
+  ```bash
+  sudo apt install espeak-ng
+  ```
+
+### Using it
+
+```bash
+geoclaw say "hello from geoclaw"           # one-off TTS
+geoclaw chat --voice                       # chat with replies spoken
+you › /voice on                            # toggle mid-conversation
+```
+
+The agent has a `speak` tool too, so goals like
+`geoclaw agent "summarize the last invoice and announce it"` will narrate.
+
+### Upgrading to high-quality voice
+
+```bash
+export GEOCLAW_TTS_PROVIDER=openai
+export GEOCLAW_TTS_OPENAI_KEY=sk-...       # or reuse OPENAI_API_KEY
+export GEOCLAW_TTS_VOICE=alloy             # alloy | echo | fable | onyx | nova | shimmer
+export GEOCLAW_TTS_MODEL=tts-1             # or tts-1-hd
+```
+
+Requires an audio player on Linux (`mpg123`, `ffplay`, `paplay`, or `aplay`).
+macOS and Windows use built-in players.
+
+---
+
+## 10. Uploading files — web UI and Telegram bot
+
+CLI `geoclaw ingest` is great for admins. End users need easier paths.
+
+### Web UI — `geoclaw upload`
+
+```bash
+geoclaw upload
+# → http://127.0.0.1:7711
+```
+
+What it gives you:
+- Drag-and-drop any supported file (multi-file OK).
+- Workspace dropdown — switch or create workspaces inline.
+- Add single facts, search the KB, list entries, forget individual memories,
+  remove all chunks from a source file.
+- Zero external dependencies; the whole UI is served from one Node file.
+
+By default the server binds to `127.0.0.1` (localhost only). To expose it to a
+small LAN team, set a passphrase and bind externally:
+
+```bash
+export GEOCLAW_WEB_HOST=0.0.0.0
+export GEOCLAW_WEB_PASSPHRASE="pick-a-long-random-string"
+export GEOCLAW_WEB_PORT=7711
+geoclaw upload
+```
+
+⚠ If you bind to `0.0.0.0` without a passphrase you'll get a loud warning —
+don't do that on a shared network.
+
+### Telegram bot — `geoclaw bot`
+
+Every end user's phone is already a capable upload client. The bot accepts
+documents and text and writes them to a workspace that's pinned per chat.
+
+Setup:
+
+```bash
+# 1. Create a bot via @BotFather on Telegram, copy the token.
+# 2. Save it:
+export GEOCLAW_TELEGRAM_BOT_TOKEN="123456:ABC..."
+# 3. Lock it down to known users (STRONGLY recommended):
+export GEOCLAW_TELEGRAM_ALLOWED_IDS="11111,22222,33333"
+# 4. Optional: default workspace for new chats
+export GEOCLAW_TELEGRAM_DEFAULT_WS="telegram"
+# 5. Start it:
+geoclaw bot
+```
+
+How end users interact:
+
+| Action | What happens |
+|---|---|
+| Send `/start`           | Bot replies with help and the user's chat ID |
+| Send any text           | Saved as a memory in that chat's workspace |
+| Send a document         | Ingested (PDF, DOCX, XLSX, TXT, MD, CSV, …) |
+| Send `/recall <q>`      | Top matches from their workspace |
+| Send `/workspace <name>`| Switch this chat to a workspace |
+| Send `/workspaces`      | List available workspaces |
+| Send `/list`            | Recent memories |
+| Send `/forget <id>`     | Delete a memory |
+
+Per-chat workspace bindings live at `~/.geoclaw/telegram-bindings.json`.
+
+Tip: to find a user's chat ID, have them DM the bot `/start` — the reply
+includes it. Add it to `GEOCLAW_TELEGRAM_ALLOWED_IDS` and restart.
+
+---
+
+## 11. Business-deployment patterns
 
 These are the shapes that work well for regulated / multi-department use.
 
@@ -320,7 +433,7 @@ geoclaw agent "draft a summary of Q1 material variances for the Acme file"
 
 ---
 
-## 10. Troubleshooting
+## 12. Troubleshooting
 
 ### `npm: command not found`
 Install Node.js from https://nodejs.org/.
@@ -376,7 +489,7 @@ geoclaw doctor
 
 ---
 
-## 11. Environment variables (reference)
+## 13. Environment variables (reference)
 
 | Variable | Purpose |
 |---|---|
@@ -390,7 +503,18 @@ geoclaw doctor
 | `GEOCLAW_LLM_TIMEOUT_MS`     | Per-LLM-request timeout (ms) |
 | `GEOCLAW_SUBAGENT_MAX_DEPTH` | Subagent nesting cap |
 | `GEOCLAW_MONDAY_API_TOKEN`   | Monday.com API token |
-| `GEOCLAW_TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `GEOCLAW_TELEGRAM_BOT_TOKEN` | Telegram bot token (for `geoclaw bot`) |
+| `GEOCLAW_TELEGRAM_ALLOWED_IDS` | Comma-separated chat IDs allowed to use the bot |
+| `GEOCLAW_TELEGRAM_DEFAULT_WS`  | Default workspace for new Telegram chats |
+| `GEOCLAW_TELEGRAM_MAX_BYTES`   | Max upload size for bot ingest (default 20 MB) |
+| `GEOCLAW_TTS_PROVIDER`       | `system` / `openai` / `off` |
+| `GEOCLAW_TTS_OPENAI_KEY`     | API key for OpenAI TTS (falls back to `OPENAI_API_KEY`) |
+| `GEOCLAW_TTS_MODEL`          | OpenAI TTS model (`tts-1`, `tts-1-hd`) |
+| `GEOCLAW_TTS_VOICE`          | OpenAI TTS voice (`alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`) |
+| `GEOCLAW_WEB_HOST`           | Bind host for `geoclaw upload` (default `127.0.0.1`) |
+| `GEOCLAW_WEB_PORT`           | Bind port for `geoclaw upload` (default `7711`) |
+| `GEOCLAW_WEB_PASSPHRASE`     | Required for auth when binding to non-localhost |
+| `GEOCLAW_WEB_MAX_BYTES`      | Max upload size via web UI (default 100 MB) |
 | `GEOCLAW_DIR`                | Override the install directory (usually auto-detected) |
 
 These are set by `geoclaw setup` into a `.env` file. You can also set them
@@ -398,7 +522,7 @@ ad-hoc in your shell for a single command.
 
 ---
 
-## 12. Where data lives
+## 14. Where data lives
 
 ```
 ~/.geoclaw/
@@ -417,7 +541,7 @@ Back up `~/.geoclaw/workspaces/` to back up your entire knowledge base.
 
 ---
 
-## 13. Uninstall
+## 15. Uninstall
 
 ```bash
 npm uninstall -g geoclaw-universal
@@ -427,7 +551,7 @@ rm -rf ~/.geoclaw
 
 ---
 
-## 14. Getting help
+## 16. Getting help
 
 - **Built-in help**: `geoclaw --help`
 - **Doctor**: `geoclaw doctor`

@@ -70,6 +70,9 @@ Commands:
   remember <text> Save a fact to the knowledge base
   recall <query>  Search the knowledge base
   ingest <file>   Ingest a document (.txt/.md/.pdf/.docx/.xlsx/.csv) into the knowledge base
+  upload          Start the local web UI for managing the knowledge base
+  bot             Start the Telegram bot (needs GEOCLAW_TELEGRAM_BOT_TOKEN)
+  say <text>      Speak text out loud (text-to-speech)
   memory          Manage the knowledge base (list, forget, stats, export, clear)
   workspace       Manage workspaces (list, create, use, current, delete)
   start           Start Geoclaw agent platform
@@ -441,6 +444,20 @@ async function main() {
     case 'workspace':
     case 'ws':
       await runScript('components/memory.js', ['workspace', ...args.slice(1)]);
+      break;
+
+    case 'say':
+      await runScript('components/tts.js', args.slice(1));
+      break;
+
+    case 'upload':
+    case 'web':
+      await runScript('components/web-upload.js', args.slice(1));
+      break;
+
+    case 'bot':
+    case 'telegram-bot':
+      await runScript('components/telegram-bot.js', args.slice(1));
       break;
 
     case 'doctor':
