@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>Geoclaw</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="app.css" />
 </head>
 <body>
@@ -51,17 +52,27 @@
   <main class="main">
     <!-- ── CHAT ─────────────────────────────────────────────────────────── -->
     <section class="view" data-view="chat" hidden>
-      <header class="view-header">
-        <h1>Chat</h1>
+      <header class="chat-header">
+        <h1 id="chat-title">New conversation</h1>
         <div class="view-actions">
-          <button id="chat-clear">Clear</button>
+          <button id="chat-clear" class="ghost">Clear</button>
         </div>
       </header>
-      <div class="chat-log" id="chat-log"></div>
-      <form class="chat-composer" id="chat-composer">
-        <textarea id="chat-input" placeholder="Ask anything, or say &quot;build me a dashboard for…&quot;" rows="1"></textarea>
-        <button type="submit" id="chat-send" class="primary">Send</button>
-      </form>
+      <div class="chat-scroll" id="chat-scroll">
+        <div class="chat-container" id="chat-log">
+          <div class="chat-empty" id="chat-empty">
+            <div class="glyph">✳</div>
+            <h2>How can I help?</h2>
+            <p>Ask anything, or say "build me a dashboard for…"</p>
+          </div>
+        </div>
+      </div>
+      <div class="chat-composer">
+        <form id="chat-composer">
+          <textarea id="chat-input" placeholder="Message Geoclaw…" rows="1"></textarea>
+          <button type="submit" id="chat-send" class="chat-send" title="Send (Enter)" aria-label="Send">↑</button>
+        </form>
+      </div>
     </section>
 
     <!-- ── INBOX ────────────────────────────────────────────────────────── -->

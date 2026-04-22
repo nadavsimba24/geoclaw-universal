@@ -168,29 +168,65 @@ async function loadMe() {
     q('#provider-chip').textContent  = `${ME.provider} · ${ME.model}`;
     q('#workspace-chip').textContent = `workspace: ${ME.workspace}`;
     applyTheme(ME.design);
+    renderKeyBanner();
   } catch (e) {
     toast(`Boot failed: ${e.message}`, 'error', 6000);
   }
+}
+
+function renderKeyBanner() {
+  const existing = q('#key-banner');
+  if (existing) existing.remove();
+  if (!ME || ME.hasKey) return;
+  const banner = el('div', { id: 'key-banner', class: 'banner' },
+    el('span', {}, '⚠'),
+    el('span', { html:
+      `No LLM API key set — chat won't work until you set <code>GEOCLAW_MODEL_API_KEY</code> in your <code>.env</code> and restart <code>geoclaw serve</code>.`
+    })
+  );
+  const log = q('#chat-log');
+  if (log) log.insertBefore(banner, log.firstChild);
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
 
 const chatHistory = [];  // [{ role, content, tool_calls?, tool_call_id? }]
 
+function hideChatEmpty() {
+  const e = q('#chat-empty');
+  if (e) e.remove();
+}
+
 function renderMsg(role, text) {
+  hideChatEmpty();
   const log = q('#chat-log');
-  const avatar = { user: 'U', assistant: 'G', tool: '⚙', system: 'S' }[role] || '·';
+  const avatar = { user: 'U', assistant: '✳', tool: '⚙', system: 'S' }[role] || '·';
   const node = el('div', { class: `msg ${role}` },
     el('div', { class: 'msg-avatar' }, avatar),
     el('div', { class: 'msg-body' })
   );
   log.appendChild(node);
   if (text) setMsgText(node, text);
-  log.scrollTop = log.scrollHeight;
+  else if (role === 'assistant') {
+    // typing indicator while waiting for first content
+    q('.msg-body', node).innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+  }
+  q('#chat-scroll').scrollTop = q('#chat-scroll').scrollHeight;
   return node;
 }
 function setMsgText(node, text) {
   q('.msg-body', node).innerHTML = markdown(text);
+}
+function appendInlineError(node, message) {
+  const body = q('.msg-body', node);
+  // If only the typing indicator was in there, clear it first
+  if (body.querySelector('.typing') && !body.textContent.trim().replace(/•/g, '')) {
+    body.innerHTML = '';
+  }
+  body.appendChild(el('div', { class: 'inline-error' },
+    el('span', {}, '⚠'),
+    el('span', {}, message)
+  ));
 }
 // Ultra-minimal markdown: **bold**, `code`, ```code blocks```, newlines.
 function markdown(s) {
@@ -207,12 +243,25 @@ function markdown(s) {
 q('#chat-clear').addEventListener('click', () => {
   chatHistory.length = 0;
   q('#chat-log').innerHTML = '';
+  q('#chat-log').appendChild(el('div', { class: 'chat-empty', id: 'chat-empty' },
+    el('div', { class: 'glyph' }, '✳'),
+    el('h2', {}, 'How can I help?'),
+    el('p', {}, 'Ask anything, or say "build me a dashboard for…"'),
+  ));
+  renderKeyBanner();
 });
 
 q('#chat-composer').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = q('#chat-input').value.trim();
   if (!text) return;
+
+  // Guard: no API key → explain instead of silent failure.
+  if (ME && !ME.hasKey) {
+    toast('Set GEOCLAW_MODEL_API_KEY in .env, then restart geoclaw serve.', 'error', 8000);
+    return;
+  }
+
   q('#chat-input').value = '';
   q('#chat-input').style.height = 'auto';
   chatHistory.push({ role: 'user', content: text });
@@ -222,31 +271,37 @@ q('#chat-composer').addEventListener('submit', async (e) => {
 
   const source = apiEventSource('/api/chat', { messages: chatHistory });
   let acc = '';
+  let gotContent = false;
+  let errored = false;
 
   source.addEventListener('content', (ev) => {
     acc = ev.detail.text;
+    gotContent = true;
     setMsgText(assistantNode, acc);
-    q('#chat-log').scrollTop = q('#chat-log').scrollHeight;
+    q('#chat-scroll').scrollTop = q('#chat-scroll').scrollHeight;
   });
   source.addEventListener('tool-start', (ev) => {
+    // clear typing indicator once the first event lands
+    if (!gotContent) q('.msg-body', assistantNode).innerHTML = '';
     const { name, args } = ev.detail;
     const bubble = el('div', { class: 'tool-bubble' },
       el('span', { class: 'tool-name' }, name),
       args && Object.keys(args).length
-        ? el('span', { class: 'tool-args' }, ' ' + JSON.stringify(args).slice(0, 100))
+        ? el('span', { class: 'tool-args' }, JSON.stringify(args).slice(0, 100))
         : null,
-      el('span', { class: 'running', 'data-name': name }, ' …')
+      el('span', { class: 'running', 'data-name': name }, '…')
     );
     q('.msg-body', assistantNode).appendChild(bubble);
-    q('#chat-log').scrollTop = q('#chat-log').scrollHeight;
+    q('#chat-scroll').scrollTop = q('#chat-scroll').scrollHeight;
   });
   source.addEventListener('tool-end', (ev) => {
-    const { name, ok, summary } = ev.detail;
+    const { ok, summary } = ev.detail;
     const bubbles = qa('.tool-bubble', assistantNode);
     const bubble  = bubbles[bubbles.length - 1];
+    if (!bubble) return;
     const running = q('.running', bubble);
     if (running) {
-      running.textContent = ok ? ' ✓' : ' ✗';
+      running.textContent = ok ? '✓' : '✗';
       running.className   = ok ? 'tool-ok' : 'tool-fail';
       running.title = summary;
     }
@@ -256,10 +311,18 @@ q('#chat-composer').addEventListener('submit', async (e) => {
     q('#chat-send').disabled = false;
   });
   source.addEventListener('error', (ev) => {
-    toast(`Chat error: ${ev.detail.message || 'unknown'}`, 'error', 6000);
+    errored = true;
+    const msg = (ev.detail && ev.detail.message) || 'unknown error';
+    appendInlineError(assistantNode, msg);
     q('#chat-send').disabled = false;
   });
-  source.addEventListener('end', () => { q('#chat-send').disabled = false; });
+  source.addEventListener('end', () => {
+    q('#chat-send').disabled = false;
+    if (!gotContent && !errored) {
+      // Server closed stream with no content — treat as generic error
+      appendInlineError(assistantNode, 'No response from model. Check that GEOCLAW_MODEL_API_KEY is set and valid.');
+    }
+  });
 });
 
 q('#chat-input').addEventListener('keydown', (e) => {

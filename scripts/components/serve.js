@@ -414,6 +414,13 @@ async function handle(req, res) {
   if (req.method === 'GET' && (pathname === '/app.js' || pathname === '/app.css' || pathname === '/logo.svg')) {
     return sendFile(res, path.join(UI_DIR, pathname.slice(1)));
   }
+  // Favicon — browsers request this automatically without the token, so serve
+  // it without auth to avoid console spam. We return a small SVG mark.
+  if (req.method === 'GET' && (pathname === '/favicon.ico' || pathname === '/favicon.svg')) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#7A5FE6"/><text x="16" y="22" text-anchor="middle" font-family="system-ui,sans-serif" font-size="20" font-weight="700" fill="#fff">✳</text></svg>`;
+    res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(svg);
+  }
 
   if (!checkAuth(req)) return sendJSON(res, 401, { error: 'auth required (append ?k=<token> to the URL)' });
 
