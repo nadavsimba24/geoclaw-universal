@@ -153,6 +153,99 @@ const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'design_tokens',
+      description:
+        'Read a DESIGN.md file and return its parsed tokens (colors, typography, spacing, rounded, components) and section list. ' +
+        'Call this before generating UI code so you style with the right palette. Defaults to ./DESIGN.md.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file: { type: 'string', description: 'Path to a DESIGN.md file. Defaults to ./DESIGN.md.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'design_lint',
+      description:
+        'Lint a DESIGN.md via @google/design.md — reports broken token references, WCAG contrast issues, and structural errors.',
+      parameters: {
+        type: 'object',
+        properties: { file: { type: 'string' } },
+        required: ['file'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'design_diff',
+      description: 'Compare two DESIGN.md files (token-level + prose regressions) via @google/design.md.',
+      parameters: {
+        type: 'object',
+        properties: {
+          a: { type: 'string', description: 'Path to the baseline DESIGN.md.' },
+          b: { type: 'string', description: 'Path to the candidate DESIGN.md.' },
+        },
+        required: ['a', 'b'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'design_export',
+      description: 'Export a DESIGN.md to another format — "tailwind" (tailwind theme config JSON) or "dtcg" (Design Tokens CG JSON).',
+      parameters: {
+        type: 'object',
+        properties: {
+          file: { type: 'string' },
+          format: { type: 'string', enum: ['tailwind', 'dtcg'] },
+        },
+        required: ['file', 'format'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'design_init',
+      description:
+        'Scaffold a new DESIGN.md from a built-in starter template. ' +
+        'Templates: editorial (premium, serious), corporate (enterprise), playful (friendly), brutalist (raw mono).',
+      parameters: {
+        type: 'object',
+        properties: {
+          file: { type: 'string', description: 'Output path (e.g. ./DESIGN.md).' },
+          template: { type: 'string', enum: ['editorial', 'corporate', 'playful', 'brutalist'] },
+          name: { type: 'string', description: 'Optional: brand name to write into the YAML front matter.' },
+        },
+        required: ['file'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'design_suggest',
+      description:
+        'Generate a ready-to-use on-brand component snippet (HTML+CSS, sometimes React) using the tokens of a DESIGN.md. ' +
+        'Supported components: button, card, input, heading.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file: { type: 'string' },
+          component: { type: 'string', enum: ['button', 'card', 'input', 'heading'] },
+        },
+        required: ['file', 'component'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'finish',
       description: 'Declare the goal complete with a short summary for the user.',
       parameters: {
@@ -231,6 +324,33 @@ async function callTool(name, args, ctx) {
         const monday = require('./monday-integration.js');
         const item = await monday.createItem(args.boardId, args.itemName);
         return { ok: true, item };
+      }
+      case 'design_tokens': {
+        const design = require('./design.js');
+        return design.summarize(args.file || 'DESIGN.md');
+      }
+      case 'design_lint': {
+        const design = require('./design.js');
+        return design.lint(args.file);
+      }
+      case 'design_diff': {
+        const design = require('./design.js');
+        return design.diff(args.a, args.b);
+      }
+      case 'design_export': {
+        const design = require('./design.js');
+        return design.exportFormat(args.file, args.format);
+      }
+      case 'design_init': {
+        const design = require('./design.js');
+        return design.init(args.file || 'DESIGN.md', {
+          template: args.template || 'editorial',
+          name: args.name,
+        });
+      }
+      case 'design_suggest': {
+        const design = require('./design.js');
+        return design.suggestSnippet(args.file || 'DESIGN.md', args.component);
       }
       case 'send_telegram': {
         const token = env('GEOCLAW_TELEGRAM_BOT_TOKEN');
@@ -512,6 +632,12 @@ Tools available:
   monday_get_board           — read a board
   monday_create_item         — create item on a board
   send_telegram              — send a Telegram message
+  design_tokens              — read a DESIGN.md's tokens + sections
+  design_lint                — lint a DESIGN.md (contrast, token refs)
+  design_diff                — compare two DESIGN.md files
+  design_export              — export tokens to tailwind/dtcg JSON
+  design_init                — scaffold a new DESIGN.md from a template
+  design_suggest             — generate an on-brand component snippet
   ask_user                   — pause and ask (interactive mode only)
   finish                     — declare the goal complete
 

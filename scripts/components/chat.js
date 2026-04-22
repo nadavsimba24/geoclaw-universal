@@ -79,6 +79,8 @@ const CHAT_TOOL_NAMES = new Set([
   'remember', 'recall',
   'monday_list_boards', 'monday_get_board', 'monday_create_item',
   'send_telegram', 'ask_user',
+  'design_tokens', 'design_lint', 'design_diff', 'design_export',
+  'design_init', 'design_suggest',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
@@ -622,6 +624,7 @@ const SLASH_COMMANDS = [
   { cmd: '/compact', desc: 'summarize older history into one note to free context' },
   { cmd: '/btw',     desc: '<text> — side-note folded into your next message' },
   { cmd: '/tool',    desc: '<name> [json] — call a tool directly, bypassing the LLM' },
+  { cmd: '/design',  desc: '[init|tokens|lint|export|diff|suggest] — design-system toolkit' },
   { cmd: '/history', desc: 'show message count, ~tokens, pending btw' },
   { cmd: '/system',  desc: 'show current system prompt' },
   { cmd: '/tools',   desc: 'list available tools' },
@@ -629,6 +632,162 @@ const SLASH_COMMANDS = [
   { cmd: '/help',    desc: 'this message' },
 ];
 const SLASH_NAMES = SLASH_COMMANDS.map(c => c.cmd);
+
+// ── /design slash-command handler ─────────────────────────────────────────────
+
+async function handleDesignCommand(rest) {
+  const design = require('./design.js');
+  const parts = rest ? rest.split(/\s+/).filter(Boolean) : [];
+  const sub   = (parts[0] || '').toLowerCase();
+
+  const printSummary = (s) => {
+    console.log('');
+    console.log(`  ${col(C.bold, s.name || '(unnamed)')} ${col(C.dim, s.file)}`);
+    if (s.description) console.log(`  ${col(C.dim, s.description)}`);
+    if (s.colors.length) {
+      console.log('');
+      console.log(col(C.violet, '  colors'));
+      for (const { name, value } of s.colors) {
+        console.log(`    ${col(C.teal, name.padEnd(14))} ${col(C.dim, String(value))}`);
+      }
+    }
+    if (s.typography.length) {
+      console.log('');
+      console.log(col(C.violet, '  typography'));
+      console.log(`    ${col(C.dim, s.typography.join(', '))}`);
+    }
+    if (s.spacing.length || s.rounded.length) {
+      console.log('');
+      if (s.spacing.length) console.log(`  ${col(C.violet, 'spacing')}  ${col(C.dim, s.spacing.join(', '))}`);
+      if (s.rounded.length) console.log(`  ${col(C.violet, 'rounded')}  ${col(C.dim, s.rounded.join(', '))}`);
+    }
+    if (s.components.length) {
+      console.log('');
+      console.log(col(C.violet, '  components'));
+      console.log(`    ${col(C.dim, s.components.join(', '))}`);
+    }
+  };
+
+  const printJSON = (obj) => {
+    console.log('');
+    console.log(JSON.stringify(obj, null, 2));
+  };
+
+  // Bare `/design` → summarize ./DESIGN.md (or GEOCLAW.md as fallback).
+  if (!sub) {
+    const candidates = ['DESIGN.md', 'design.md', 'GEOCLAW.md'];
+    const path_ = require('path');
+    const fs_   = require('fs');
+    const pick = candidates.find(c => fs_.existsSync(path_.resolve(c)));
+    if (!pick) {
+      console.log(col(C.dim, '  (no DESIGN.md here — try /design init [template] to create one)'));
+      console.log(col(C.dim, '  templates: ' + design.listTemplates().join(', ')));
+      return;
+    }
+    const s = design.summarize(pick);
+    if (!s.ok) { console.log(`  ${col(C.red, '✗')} ${s.error}`); return; }
+    printSummary(s);
+    return;
+  }
+
+  try {
+    switch (sub) {
+      case 'help': {
+        console.log('');
+        console.log(col(C.bold, '  /design — design-system toolkit'));
+        console.log(`  ${col(C.cyan, '/design')}                           summary of ./DESIGN.md`);
+        console.log(`  ${col(C.cyan, '/design tokens [file]')}             parsed tokens + sections`);
+        console.log(`  ${col(C.cyan, '/design init [template] [name]')}    scaffold DESIGN.md (templates below)`);
+        console.log(`  ${col(C.cyan, '/design lint [file]')}               contrast + token refs + structure`);
+        console.log(`  ${col(C.cyan, '/design diff <a> <b>')}              compare two DESIGN.md files`);
+        console.log(`  ${col(C.cyan, '/design export <fmt> [file]')}       fmt = tailwind | dtcg`);
+        console.log(`  ${col(C.cyan, '/design suggest <comp> [file]')}     comp = button | card | input | heading`);
+        console.log(`  ${col(C.cyan, '/design templates')}                 list built-in templates`);
+        console.log('');
+        console.log(col(C.dim, '  templates: ' + design.listTemplates().join(', ')));
+        return;
+      }
+      case 'tokens':
+      case 'summary': {
+        const file = parts[1] || 'DESIGN.md';
+        const s = design.summarize(file);
+        if (!s.ok) { console.log(`  ${col(C.red, '✗')} ${s.error}`); return; }
+        printSummary(s);
+        return;
+      }
+      case 'templates': {
+        console.log('');
+        for (const t of design.listTemplates()) console.log(`  ${col(C.teal, t)}`);
+        return;
+      }
+      case 'init': {
+        // /design init [template] [name]  → writes ./DESIGN.md
+        const template = parts[1] || 'editorial';
+        const name     = parts.slice(2).join(' ') || undefined;
+        const r = design.init('DESIGN.md', { template, name });
+        if (!r.ok) { console.log(`  ${col(C.red, '✗')} ${r.error}`); return; }
+        console.log(`  ${col(C.green, '✓')} created ${col(C.bold, r.file)} ${col(C.dim, 'from ' + r.template)}`);
+        return;
+      }
+      case 'lint': {
+        const file = parts[1] || 'DESIGN.md';
+        const spin = makeSpinner('Linting');
+        spin.start();
+        const r = await design.lint(file);
+        spin.stop();
+        if (!r.ok && r.error) { console.log(`  ${col(C.red, '✗')} ${r.error}`); return; }
+        printJSON(r.data ?? r);
+        return;
+      }
+      case 'diff': {
+        if (parts.length < 3) { console.log(col(C.dim, '  (usage: /design diff <a> <b>)')); return; }
+        const spin = makeSpinner('Diffing');
+        spin.start();
+        const r = await design.diff(parts[1], parts[2]);
+        spin.stop();
+        if (!r.ok && r.error) { console.log(`  ${col(C.red, '✗')} ${r.error}`); return; }
+        printJSON(r.data ?? r);
+        return;
+      }
+      case 'export': {
+        const fmt  = (parts[1] || '').toLowerCase();
+        const file = parts[2] || 'DESIGN.md';
+        if (!['tailwind', 'dtcg'].includes(fmt)) {
+          console.log(col(C.dim, '  (usage: /design export <tailwind|dtcg> [file])'));
+          return;
+        }
+        const spin = makeSpinner(`Exporting to ${fmt}`);
+        spin.start();
+        const r = await design.exportFormat(file, fmt);
+        spin.stop();
+        if (!r.ok && r.error) { console.log(`  ${col(C.red, '✗')} ${r.error}`); return; }
+        printJSON(r.data ?? r);
+        return;
+      }
+      case 'suggest': {
+        const comp = (parts[1] || '').toLowerCase();
+        const file = parts[2] || 'DESIGN.md';
+        if (!comp) { console.log(col(C.dim, '  (usage: /design suggest <button|card|input|heading> [file])')); return; }
+        const r = design.suggestSnippet(file, comp);
+        if (!r.ok) { console.log(`  ${col(C.red, '✗')} ${r.error}`); return; }
+        console.log('');
+        console.log(`  ${col(C.bold, r.component)} ${col(C.dim, 'using ' + JSON.stringify(r.tokensUsed))}`);
+        console.log('');
+        console.log(r.snippet.html);
+        if (r.snippet.react) {
+          console.log('');
+          console.log(col(C.dim, '  // React variant:'));
+          console.log(r.snippet.react);
+        }
+        return;
+      }
+      default:
+        console.log(col(C.dim, `  (unknown /design subcommand "${sub}" — try /design help)`));
+    }
+  } catch (e) {
+    console.log(`  ${col(C.red, '✗')} ${e.message}`);
+  }
+}
 
 // ── REPL ──────────────────────────────────────────────────────────────────────
 
@@ -893,6 +1052,12 @@ async function repl() {
         } catch (e) {
           console.log(`  ${col(C.red, '✗')} ${e.message}`);
         }
+        console.log('');
+        return ask();
+      }
+
+      if (text.startsWith('/design')) {
+        await handleDesignCommand(text.slice(7).trim());
         console.log('');
         return ask();
       }
