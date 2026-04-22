@@ -73,6 +73,7 @@ Commands:
   status          Show platform status
   workflow        Magic workflow commands
   mcp             MCP integration commands
+  monday          Monday.com commands (boards, create, update, comment)
   help            Show this help
 
 Examples:
@@ -391,6 +392,10 @@ async function main() {
         break;
       }
       await runScript('components/mcporter-integration.js', args.slice(1));
+      break;
+
+    case 'monday':
+      await runScript('components/monday-integration.js', args.slice(1));
       break;
 
     case 'doctor':
