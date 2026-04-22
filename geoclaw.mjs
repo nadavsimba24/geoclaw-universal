@@ -69,8 +69,9 @@ Commands:
   agent <goal>    Autonomous agent — plans and executes a goal using tools
   remember <text> Save a fact to the knowledge base
   recall <query>  Search the knowledge base
-  ingest <file>   Ingest a document (.txt/.md/.pdf/.csv) into the knowledge base
+  ingest <file>   Ingest a document (.txt/.md/.pdf/.docx/.xlsx/.csv) into the knowledge base
   memory          Manage the knowledge base (list, forget, stats, export, clear)
+  workspace       Manage workspaces (list, create, use, current, delete)
   start           Start Geoclaw agent platform
   setup           Interactive setup wizard
   doctor          Check system requirements & diagnose issues
@@ -435,6 +436,11 @@ async function main() {
 
     case 'ingest':
       await runScript('components/ingest.js', args.slice(1));
+      break;
+
+    case 'workspace':
+    case 'ws':
+      await runScript('components/memory.js', ['workspace', ...args.slice(1)]);
       break;
 
     case 'doctor':

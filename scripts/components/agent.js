@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Geoclaw autonomous agent — give it a goal, it plans and executes using available tools
+// Geoclaw autonomous agent — plans, calls tools, spawns subagents.
 
 const https = require('https');
 const http = require('http');
@@ -7,9 +7,11 @@ const path = require('path');
 const readline = require('readline');
 const { URL } = require('url');
 
-require('dotenv').config({
-  path: path.join(process.env.GEOCLAW_DIR || path.join(__dirname, '..', '..'), '.env'),
-});
+try {
+  require('dotenv').config({
+    path: path.join(process.env.GEOCLAW_DIR || path.join(__dirname, '..', '..'), '.env'),
+  });
+} catch { /* dotenv is optional — env vars from the shell still work */ }
 
 const memory = require('./memory.js');
 
@@ -18,59 +20,79 @@ const MODEL    = process.env.GEOCLAW_MODEL_NAME || 'deepseek-chat';
 const API_KEY  = process.env.GEOCLAW_MODEL_API_KEY || '';
 const BASE_URL = process.env.GEOCLAW_MODEL_BASE_URL || '';
 const MAX_STEPS = parseInt(process.env.GEOCLAW_AGENT_MAX_STEPS || '12', 10);
+const TOOL_TIMEOUT_MS = parseInt(process.env.GEOCLAW_TOOL_TIMEOUT_MS || '30000', 10);
+const LLM_TIMEOUT_MS  = parseInt(process.env.GEOCLAW_LLM_TIMEOUT_MS  || '60000', 10);
+const MAX_SUBAGENT_DEPTH = parseInt(process.env.GEOCLAW_SUBAGENT_MAX_DEPTH || '2', 10);
 
-// ── Tool catalog (what the agent can actually do) ─────────────────────────────
+// ── Tool catalog ──────────────────────────────────────────────────────────────
 
 const toolDefinitions = [
   {
     type: 'function',
     function: {
       name: 'remember',
-      description: 'Save a fact or note to long-term memory. Use this when you learn something the user or future-you would want to remember.',
+      description: 'Save a fact to long-term memory (in the active workspace).',
       parameters: {
         type: 'object',
         properties: {
-          text: { type: 'string', description: 'The fact to remember.' },
-          tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags.' }
+          text: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
         },
-        required: ['text']
-      }
-    }
+        required: ['text'],
+      },
+    },
   },
   {
     type: 'function',
     function: {
       name: 'recall',
-      description: 'Search long-term memory for relevant facts. Use before answering factual questions.',
+      description: 'Search the workspace knowledge base. Call before answering factual questions.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'What to search for.' },
-          limit: { type: 'integer', description: 'Max results (default 5).' }
+          query: { type: 'string' },
+          limit: { type: 'integer' },
         },
-        required: ['query']
-      }
-    }
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'spawn_subagent',
+      description:
+        'Delegate a narrower sub-task to a child agent. Use this to decompose complex goals. ' +
+        'The child inherits the current workspace. Returns the child\'s final summary.',
+      parameters: {
+        type: 'object',
+        properties: {
+          goal: { type: 'string', description: 'Clear, self-contained goal for the subagent.' },
+          max_steps: { type: 'integer', description: 'Cap on child\'s tool-call steps (default 8).' },
+        },
+        required: ['goal'],
+      },
+    },
   },
   {
     type: 'function',
     function: {
       name: 'monday_list_boards',
       description: 'List all Monday.com boards the user has access to.',
-      parameters: { type: 'object', properties: {} }
-    }
+      parameters: { type: 'object', properties: {} },
+    },
   },
   {
     type: 'function',
     function: {
       name: 'monday_get_board',
-      description: 'Get a Monday.com board\'s columns and items.',
+      description: "Get a Monday.com board's columns and items.",
       parameters: {
         type: 'object',
         properties: { boardId: { type: 'string' } },
-        required: ['boardId']
-      }
-    }
+        required: ['boardId'],
+      },
+    },
   },
   {
     type: 'function',
@@ -80,12 +102,12 @@ const toolDefinitions = [
       parameters: {
         type: 'object',
         properties: {
-          boardId: { type: 'string' },
-          itemName: { type: 'string' }
+          boardId:  { type: 'string' },
+          itemName: { type: 'string' },
         },
-        required: ['boardId', 'itemName']
-      }
-    }
+        required: ['boardId', 'itemName'],
+      },
+    },
   },
   {
     type: 'function',
@@ -95,51 +117,91 @@ const toolDefinitions = [
       parameters: {
         type: 'object',
         properties: {
-          chatId: { type: 'string', description: 'Telegram chat ID or username.' },
-          text:   { type: 'string' }
+          chatId: { type: 'string' },
+          text:   { type: 'string' },
         },
-        required: ['chatId', 'text']
-      }
-    }
+        required: ['chatId', 'text'],
+      },
+    },
   },
   {
     type: 'function',
     function: {
       name: 'ask_user',
-      description: 'Pause and ask the user a clarifying question. Use when you\'re stuck or need a decision.',
+      description: 'Pause and ask the user a clarifying question. Only works in interactive mode.',
       parameters: {
         type: 'object',
         properties: { question: { type: 'string' } },
-        required: ['question']
-      }
-    }
+        required: ['question'],
+      },
+    },
   },
   {
     type: 'function',
     function: {
       name: 'finish',
-      description: 'Declare the goal complete. Call this when you\'re done. Summary goes to the user.',
+      description: 'Declare the goal complete with a short summary for the user.',
       parameters: {
         type: 'object',
         properties: { summary: { type: 'string' } },
-        required: ['summary']
-      }
-    }
+        required: ['summary'],
+      },
+    },
   },
 ];
+
+// ── Tool-availability checks (fail fast, clear message) ───────────────────────
+
+function preflight(name) {
+  if (name === 'send_telegram' && !process.env.GEOCLAW_TELEGRAM_BOT_TOKEN) {
+    return { ok: false, error: 'send_telegram unavailable: GEOCLAW_TELEGRAM_BOT_TOKEN not set.' };
+  }
+  if (name.startsWith('monday_') && !process.env.GEOCLAW_MONDAY_API_TOKEN) {
+    return { ok: false, error: 'Monday tools unavailable: GEOCLAW_MONDAY_API_TOKEN not set.' };
+  }
+  return { ok: true };
+}
+
+// ── Timeout wrapper ───────────────────────────────────────────────────────────
+
+function withTimeout(promise, ms, label) {
+  let t;
+  const timeout = new Promise((_, reject) => {
+    t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
+}
 
 // ── Tool implementations ──────────────────────────────────────────────────────
 
 async function callTool(name, args, ctx) {
-  try {
+  const check = preflight(name);
+  if (!check.ok) return check;
+
+  const runner = async () => {
     switch (name) {
       case 'remember': {
-        const entry = memory.remember(args.text, { tags: args.tags || [] });
+        const entry = memory.remember(args.text, { tags: args.tags || [] }, { workspace: ctx.workspace });
         return { ok: true, id: entry.id };
       }
       case 'recall': {
-        const hits = memory.recall(args.query, args.limit || 5);
-        return { ok: true, results: hits.map(h => ({ id: h.id, text: h.text, score: h.score })) };
+        const hits = memory.recall(args.query, args.limit || 5, { workspace: ctx.workspace });
+        return { ok: true, results: hits.map(h => ({ id: h.id, text: h.text, score: h.score, source: h.source })) };
+      }
+      case 'spawn_subagent': {
+        if (ctx.depth >= MAX_SUBAGENT_DEPTH) {
+          return { ok: false, error: `Subagent depth limit reached (${MAX_SUBAGENT_DEPTH}).` };
+        }
+        const childSteps = Math.min(args.max_steps || 8, MAX_STEPS);
+        const child = await runAgent(args.goal, {
+          workspace: ctx.workspace,
+          depth: ctx.depth + 1,
+          maxSteps: childSteps,
+          rl: ctx.rl,
+          interactive: ctx.interactive,
+          label: `subagent@${ctx.depth + 1}`,
+        });
+        return { ok: child.done, summary: child.summary, steps_used: child.stepsUsed };
       }
       case 'monday_list_boards': {
         const monday = require('./monday-integration.js');
@@ -158,15 +220,17 @@ async function callTool(name, args, ctx) {
       }
       case 'send_telegram': {
         const token = process.env.GEOCLAW_TELEGRAM_BOT_TOKEN;
-        if (!token) return { ok: false, error: 'GEOCLAW_TELEGRAM_BOT_TOKEN not set' };
         const data = await postJSON(
           `https://api.telegram.org/bot${token}/sendMessage`,
           {},
-          { chat_id: args.chatId, text: args.text }
+          { chat_id: args.chatId, text: args.text },
         );
         return { ok: data.ok === true, result: data };
       }
       case 'ask_user': {
+        if (!ctx.interactive) {
+          return { ok: false, error: 'ask_user unavailable in non-interactive mode. Make a decision and proceed, or call finish.' };
+        }
         const reply = await askUser(args.question, ctx.rl);
         return { ok: true, answer: reply };
       }
@@ -178,6 +242,10 @@ async function callTool(name, args, ctx) {
       default:
         return { ok: false, error: `Unknown tool: ${name}` };
     }
+  };
+
+  try {
+    return await withTimeout(runner(), TOOL_TIMEOUT_MS, `tool ${name}`);
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -193,7 +261,7 @@ function askUser(question, rl) {
 
 // ── LLM plumbing ──────────────────────────────────────────────────────────────
 
-function postJSON(urlStr, headers, body) {
+function postJSON(urlStr, headers, body, timeoutMs = LLM_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const lib = u.protocol === 'https:' ? https : http;
@@ -201,52 +269,85 @@ function postJSON(urlStr, headers, body) {
     const req = lib.request(u, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), ...headers },
+      timeout: timeoutMs,
     }, (res) => {
       let chunks = '';
-      res.on('data', c => (chunks += c));
+      res.on('data', (c) => (chunks += c));
       res.on('end', () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          return reject(new Error(`HTTP ${res.statusCode}: ${chunks.slice(0, 500)}`));
+          const err = new Error(`HTTP ${res.statusCode}: ${chunks.slice(0, 500)}`);
+          err.statusCode = res.statusCode;
+          return reject(err);
         }
         try { resolve(JSON.parse(chunks)); }
         catch { reject(new Error(`Bad JSON: ${chunks.slice(0, 400)}`)); }
       });
     });
+    req.on('timeout', () => req.destroy(new Error(`Request timed out after ${timeoutMs}ms`)));
     req.on('error', reject);
     req.write(data);
     req.end();
   });
 }
 
-// OpenAI-compatible tool-calling (DeepSeek, OpenAI, custom)
+async function retrying(fn, { retries = 3, baseDelayMs = 800, label = 'LLM call' } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try { return await fn(); }
+    catch (e) {
+      lastErr = e;
+      const retryable =
+        e.statusCode === 429 ||
+        (e.statusCode >= 500 && e.statusCode < 600) ||
+        /ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|timed out/i.test(e.message || '');
+      if (!retryable || attempt === retries) break;
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 250);
+      console.error(`\x1b[33m⚠  ${label} failed (${e.statusCode || e.code || 'err'}), retry ${attempt + 1}/${retries} in ${delay}ms\x1b[0m`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 async function chatWithTools(messages) {
   if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY not set — run: geoclaw setup');
 
   const endpoint =
-    PROVIDER === 'openai'    ? 'https://api.openai.com/v1/chat/completions' :
-    PROVIDER === 'deepseek'  ? 'https://api.deepseek.com/chat/completions' :
-    BASE_URL                 ? `${BASE_URL.replace(/\/+$/, '')}/chat/completions` :
+    PROVIDER === 'openai'   ? 'https://api.openai.com/v1/chat/completions' :
+    PROVIDER === 'deepseek' ? 'https://api.deepseek.com/chat/completions'  :
+    BASE_URL                ? `${BASE_URL.replace(/\/+$/, '')}/chat/completions` :
     null;
 
   if (!endpoint) {
     throw new Error(
       `Agent mode requires an OpenAI-compatible provider (deepseek, openai, or custom).\n` +
       `Your current provider is "${PROVIDER}". Tool-calling on ${PROVIDER} isn't supported yet.\n` +
-      `Run: geoclaw setup — and pick DeepSeek (option 1) or OpenAI (option 2).`
+      `Run: geoclaw setup — and pick DeepSeek (option 1) or OpenAI (option 2).`,
     );
   }
 
-  const data = await postJSON(endpoint, {
+  const data = await retrying(() => postJSON(endpoint, {
     'Authorization': `Bearer ${API_KEY}`,
   }, {
     model: MODEL,
     messages,
     tools: toolDefinitions,
     tool_choice: 'auto',
-  });
+  }), { label: 'LLM tool call' });
 
   if (!data.choices?.[0]) throw new Error('LLM returned no choices: ' + JSON.stringify(data).slice(0, 400));
   return data.choices[0].message;
+}
+
+// ── Context trimming — keep history within ~40 messages ───────────────────────
+
+const MAX_HISTORY = 40;
+function trimHistory(messages) {
+  if (messages.length <= MAX_HISTORY) return messages;
+  // Always keep system + user goal; drop the oldest middle messages.
+  const head = messages.slice(0, 2);
+  const tail = messages.slice(-(MAX_HISTORY - 3));
+  return [...head, { role: 'system', content: '[earlier turns trimmed to fit context]' }, ...tail];
 }
 
 // ── Agent loop ────────────────────────────────────────────────────────────────
@@ -254,86 +355,115 @@ async function chatWithTools(messages) {
 const SYSTEM_PROMPT = `You are a Geoclaw agent. You are given a GOAL and must achieve it by calling tools.
 
 Rules:
-- Plan before acting: on your first turn, briefly outline your approach in the 'content' field, then call tools.
+- Plan before acting: on your first turn, outline your approach in the 'content' field, then call tools.
 - Use tools aggressively — you can call multiple per turn.
-- Before answering factual questions, call 'recall' to check your memory.
+- Before answering factual questions, call 'recall' to check your workspace knowledge.
 - When you learn something reusable, call 'remember' to save it.
+- For complex multi-part goals, call 'spawn_subagent' with a narrower sub-goal.
 - When the goal is complete, call 'finish' with a short summary for the user.
-- If you're blocked or need a decision, call 'ask_user' — don't guess.
+- If you need user input and are told ask_user is unavailable, make the most reasonable decision and proceed.
 - Keep going until you call 'finish'. Don't give up quietly.`;
 
-async function runAgent(goal) {
-  console.log('');
-  console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log('║                    Geoclaw Agent                             ║');
-  console.log('╚══════════════════════════════════════════════════════════════╝');
-  console.log(`Goal: ${goal}`);
-  console.log(`Model: ${PROVIDER}/${MODEL}`);
-  console.log('');
+async function runAgent(goal, opts = {}) {
+  const workspace = opts.workspace || memory.activeWorkspace();
+  const depth = opts.depth || 0;
+  const maxSteps = opts.maxSteps || MAX_STEPS;
+  const label = opts.label || 'agent';
 
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-  const ctx = { rl, done: false, summary: null };
+  const interactive = (opts.interactive !== undefined)
+    ? opts.interactive
+    : Boolean(process.stdin.isTTY);
+
+  let rl = opts.rl;
+  let ownedRl = false;
+  if (!rl && interactive) {
+    rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    ownedRl = true;
+  }
+
+  if (depth === 0) {
+    console.log('');
+    console.log('╔══════════════════════════════════════════════════════════════╗');
+    console.log('║                    Geoclaw Agent                             ║');
+    console.log('╚══════════════════════════════════════════════════════════════╝');
+    console.log(`Goal:      ${goal}`);
+    console.log(`Model:     ${PROVIDER}/${MODEL}`);
+    console.log(`Workspace: ${workspace}`);
+    if (!interactive) console.log(`Mode:      non-interactive (ask_user disabled)`);
+    console.log('');
+  } else {
+    console.log(`\x1b[35m┌── ${label} (depth ${depth}) ──\x1b[0m`);
+    console.log(`\x1b[35m│ Goal: ${goal}\x1b[0m`);
+  }
+
+  const ctx = { rl, done: false, summary: null, workspace, depth, interactive };
 
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: `Goal: ${goal}` },
+    { role: 'system', content: SYSTEM_PROMPT + `\n\nActive workspace: ${workspace}` },
+    { role: 'user',   content: `Goal: ${goal}` },
   ];
 
-  for (let step = 1; step <= MAX_STEPS; step++) {
-    console.log(`\x1b[90m─── step ${step}/${MAX_STEPS} ───\x1b[0m`);
-    let assistantMsg;
-    try {
-      assistantMsg = await chatWithTools(messages);
-    } catch (e) {
-      console.error(`\x1b[31m❌ LLM error:\x1b[0m ${e.message}`);
-      rl.close();
-      return;
-    }
+  let stepsUsed = 0;
+  try {
+    for (let step = 1; step <= maxSteps; step++) {
+      stepsUsed = step;
+      const stepLabel = depth === 0 ? `step ${step}/${maxSteps}` : `${label} step ${step}/${maxSteps}`;
+      console.log(`\x1b[90m─── ${stepLabel} ───\x1b[0m`);
 
-    messages.push(assistantMsg);
-
-    if (assistantMsg.content) {
-      console.log(`\x1b[32magent ›\x1b[0m ${assistantMsg.content}`);
-    }
-
-    const toolCalls = assistantMsg.tool_calls || [];
-    if (toolCalls.length === 0) {
-      // No tool calls and no explicit finish — treat content as final answer
-      if (!ctx.done) {
-        console.log(`\x1b[33m(agent responded without calling tools — ending)\x1b[0m`);
+      let assistantMsg;
+      try {
+        assistantMsg = await chatWithTools(trimHistory(messages));
+      } catch (e) {
+        console.error(`\x1b[31m❌ LLM error:\x1b[0m ${e.message}`);
+        return { done: false, summary: `LLM error: ${e.message}`, stepsUsed };
       }
-      break;
-    }
 
-    for (const call of toolCalls) {
-      let parsedArgs;
-      try { parsedArgs = JSON.parse(call.function.arguments || '{}'); }
-      catch { parsedArgs = {}; }
+      messages.push(assistantMsg);
 
-      console.log(`\x1b[34m  ⚙  ${call.function.name}(${JSON.stringify(parsedArgs).slice(0, 120)})\x1b[0m`);
-      const result = await callTool(call.function.name, parsedArgs, ctx);
-      const preview = JSON.stringify(result).slice(0, 160);
-      console.log(`\x1b[90m     → ${preview}${preview.length >= 160 ? '...' : ''}\x1b[0m`);
+      if (assistantMsg.content) {
+        console.log(`\x1b[32m${label} ›\x1b[0m ${assistantMsg.content}`);
+      }
 
-      messages.push({
-        role: 'tool',
-        tool_call_id: call.id,
-        content: JSON.stringify(result),
-      });
+      const toolCalls = assistantMsg.tool_calls || [];
+      if (toolCalls.length === 0) {
+        if (!ctx.done) console.log(`\x1b[33m(${label} responded without calling tools — ending)\x1b[0m`);
+        break;
+      }
+
+      for (const call of toolCalls) {
+        let parsedArgs;
+        try { parsedArgs = JSON.parse(call.function.arguments || '{}'); }
+        catch { parsedArgs = {}; }
+
+        console.log(`\x1b[34m  ⚙  ${call.function.name}(${JSON.stringify(parsedArgs).slice(0, 120)})\x1b[0m`);
+        const result = await callTool(call.function.name, parsedArgs, ctx);
+        const preview = JSON.stringify(result).slice(0, 160);
+        console.log(`\x1b[90m     → ${preview}${preview.length >= 160 ? '...' : ''}\x1b[0m`);
+
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+
+        if (ctx.done) break;
+      }
 
       if (ctx.done) break;
     }
 
-    if (ctx.done) break;
-  }
+    if (depth === 0) {
+      console.log('');
+      if (ctx.done) console.log(`\x1b[32m✅ Agent finished:\x1b[0m ${ctx.summary || '(no summary provided)'}`);
+      else          console.log(`\x1b[33m⚠  Agent hit the step limit (${maxSteps}). Set GEOCLAW_AGENT_MAX_STEPS to increase.\x1b[0m`);
+    } else {
+      console.log(`\x1b[35m└── ${label} done: ${ctx.summary || '(no summary)'}\x1b[0m`);
+    }
 
-  console.log('');
-  if (ctx.done) {
-    console.log(`\x1b[32m✅ Agent finished:\x1b[0m ${ctx.summary || '(no summary provided)'}`);
-  } else {
-    console.log(`\x1b[33m⚠  Agent hit the step limit (${MAX_STEPS}). Set GEOCLAW_AGENT_MAX_STEPS to increase.\x1b[0m`);
+    return { done: ctx.done, summary: ctx.summary, stepsUsed };
+  } finally {
+    if (ownedRl) rl.close();
   }
-  rl.close();
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
@@ -346,22 +476,29 @@ Usage: geoclaw agent "your goal in plain English"
 
 The agent plans, uses tools, and executes your goal autonomously.
 
-Available tools:
-  remember / recall          — long-term memory
+Tools available:
+  remember / recall          — long-term memory (workspace-scoped)
+  spawn_subagent             — delegate a sub-task to a child agent
   monday_list_boards         — list Monday.com boards
   monday_get_board           — read a board
   monday_create_item         — create item on a board
   send_telegram              — send a Telegram message
-  ask_user                   — pause and ask for clarification
+  ask_user                   — pause and ask (interactive mode only)
   finish                     — declare the goal complete
+
+Active workspace: ${memory.activeWorkspace()}
+Override with:    GEOCLAW_WORKSPACE=<name> geoclaw agent "..."
+
+Env:
+  GEOCLAW_AGENT_MAX_STEPS        step cap           (default 12)
+  GEOCLAW_TOOL_TIMEOUT_MS        per-tool timeout   (default 30000)
+  GEOCLAW_LLM_TIMEOUT_MS         LLM call timeout   (default 60000)
+  GEOCLAW_SUBAGENT_MAX_DEPTH     nesting cap        (default 2)
 
 Examples:
   geoclaw agent "summarize my Monday.com board 5095065110"
-  geoclaw agent "remember that Anna's DB password is in the vault"
-  geoclaw agent "check memory for our Q1 goals and draft a Telegram update"
-
-Env:
-  GEOCLAW_AGENT_MAX_STEPS    default 12 — safety limit on tool calls
+  geoclaw agent "check memory for Q1 goals and draft a Telegram update"
+  GEOCLAW_WORKSPACE=legal geoclaw agent "summarize the retention policy"
 `);
     process.exit(0);
   }

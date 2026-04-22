@@ -7,9 +7,11 @@ const readline = require('readline');
 const path = require('path');
 const { URL } = require('url');
 
-require('dotenv').config({
-  path: path.join(process.env.GEOCLAW_DIR || path.join(__dirname, '..', '..'), '.env'),
-});
+try {
+  require('dotenv').config({
+    path: path.join(process.env.GEOCLAW_DIR || path.join(__dirname, '..', '..'), '.env'),
+  });
+} catch { /* dotenv is optional — env vars from the shell still work */ }
 
 const memory = require('./memory.js');
 
@@ -25,10 +27,12 @@ When context from the knowledge base is provided below, USE it — it contains r
 
 // Build an ephemeral system prompt with relevant memories injected for this turn
 function buildSystemPrompt(userMessage) {
+  const ws = memory.activeWorkspace();
   const hits = memory.recall(userMessage, 5);
-  if (hits.length === 0) return SYSTEM_PROMPT;
+  const base = `${SYSTEM_PROMPT}\n\nActive workspace: ${ws}`;
+  if (hits.length === 0) return base;
   const facts = hits.map(h => `- ${h.text}` + (h.source ? ` (source: ${h.source})` : '')).join('\n');
-  return `${SYSTEM_PROMPT}\n\n## Relevant knowledge base context:\n${facts}`;
+  return `${base}\n\n## Relevant knowledge base context:\n${facts}`;
 }
 
 // ── Generic HTTP helpers ──────────────────────────────────────────────────────
@@ -133,7 +137,7 @@ function banner() {
   console.log('╔══════════════════════════════════════════════════════════════╗');
   console.log('║                      Geoclaw Chat                            ║');
   console.log('╚══════════════════════════════════════════════════════════════╝');
-  console.log(`Provider: ${PROVIDER}  |  Model: ${MODEL}`);
+  console.log(`Provider: ${PROVIDER}  |  Model: ${MODEL}  |  Workspace: ${memory.activeWorkspace()}`);
   console.log('Type your message. Commands: /exit, /clear, /system, /help');
   console.log('');
 }
