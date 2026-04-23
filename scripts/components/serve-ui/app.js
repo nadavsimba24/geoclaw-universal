@@ -800,6 +800,17 @@ q('#skills-create').addEventListener('click', () => {
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
+const KNOWN_PROVIDERS = [
+  { id: 'deepseek',   name: 'DeepSeek',    url: 'https://platform.deepseek.com',   models: ['deepseek-chat', 'deepseek-reasoner'],                       note: 'Cheap, fast, strong reasoning' },
+  { id: 'openai',     name: 'OpenAI',      url: 'https://platform.openai.com',     models: ['gpt-4o', 'gpt-4o-mini', 'o1-mini'],                         note: 'Best general-purpose' },
+  { id: 'anthropic',  name: 'Anthropic',   url: 'https://console.anthropic.com',   models: ['claude-sonnet-4-5', 'claude-opus-4-5', 'claude-haiku-4-5'], note: 'Excellent reasoning & code' },
+  { id: 'groq',       name: 'Groq',        url: 'https://console.groq.com',        models: ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'],            note: 'Ultra-fast inference, free tier' },
+  { id: 'openrouter', name: 'OpenRouter',  url: 'https://openrouter.ai/keys',      models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash', 'meta-llama/llama-3.3-70b-instruct'], note: '100+ models via one key' },
+  { id: 'moonshot',   name: 'Moonshot AI', url: 'https://platform.moonshot.cn',    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],   note: 'Kimi — long-context, multilingual' },
+  { id: 'google',     name: 'Google',      url: 'https://aistudio.google.com',     models: ['gemini-2.0-flash', 'gemini-1.5-pro'],                       note: 'Gemini family' },
+  { id: 'ollama',     name: 'Ollama',      url: 'https://ollama.com',              models: ['llama3.2', 'mistral', 'qwen2.5'],                           note: 'Local models — free & private' },
+];
+
 async function loadSettings() {
   if (!ME) await loadMe();
   if (!ME) return;
@@ -809,6 +820,23 @@ async function loadSettings() {
   q('#s-cwd').textContent       = ME.cwd;
   q('#s-version').textContent   = ME.version;
   q('#s-haskey').textContent    = ME.hasKey ? 'yes' : 'no — set GEOCLAW_MODEL_API_KEY';
+
+  const tbl = q('#provider-table');
+  if (tbl) {
+    tbl.innerHTML = '';
+    for (const p of KNOWN_PROVIDERS) {
+      const row = document.createElement('div');
+      row.className = 'provider-row' + (p.id === ME.provider ? ' provider-row--active' : '');
+      row.innerHTML = `
+        <div class="provider-row-name">${p.name}${p.id === ME.provider ? ' <span class="provider-badge">active</span>' : ''}</div>
+        <div class="provider-row-models">${p.models.map(m => `<code>${m}</code>`).join(' ')}</div>
+        <div class="provider-row-note">${p.note}</div>
+        <a class="provider-row-link" href="${p.url}" target="_blank" rel="noopener">Get key ↗</a>
+      `;
+      tbl.appendChild(row);
+    }
+  }
+
   const sel = q('#ws-select');
   sel.innerHTML = '';
   for (const w of ME.workspaces || []) {

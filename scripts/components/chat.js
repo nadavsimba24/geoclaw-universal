@@ -86,8 +86,10 @@ const CHAT_TOOL_NAMES = new Set([
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
+const OPENAI_COMPAT_PROVIDERS = new Set(['deepseek', 'openai', 'groq', 'openrouter', 'moonshot']);
+
 function providerSupportsTools() {
-  if (PROVIDER === 'deepseek' || PROVIDER === 'openai') return true;
+  if (OPENAI_COMPAT_PROVIDERS.has(PROVIDER)) return true;
   if (!['anthropic', 'google', 'ollama'].includes(PROVIDER) && BASE_URL) return true;
   return false;
 }
@@ -329,9 +331,12 @@ function truncateForHistory(jsonStr) {
 // ── Tool-using turn (OpenAI-compatible providers) ─────────────────────────────
 
 function chatEndpoint() {
-  if (PROVIDER === 'deepseek') return 'https://api.deepseek.com/chat/completions';
-  if (PROVIDER === 'openai')   return 'https://api.openai.com/v1/chat/completions';
-  if (BASE_URL)                return `${BASE_URL.replace(/\/+$/, '')}/chat/completions`;
+  if (PROVIDER === 'deepseek')   return 'https://api.deepseek.com/chat/completions';
+  if (PROVIDER === 'openai')     return 'https://api.openai.com/v1/chat/completions';
+  if (PROVIDER === 'groq')       return 'https://api.groq.com/openai/v1/chat/completions';
+  if (PROVIDER === 'openrouter') return 'https://openrouter.ai/api/v1/chat/completions';
+  if (PROVIDER === 'moonshot')   return 'https://api.moonshot.cn/v1/chat/completions';
+  if (BASE_URL)                  return `${BASE_URL.replace(/\/+$/, '')}/chat/completions`;
   return null;
 }
 
@@ -544,12 +549,15 @@ async function runTurnStreaming(history, marker) {
   try {
     const run = async () => {
       switch (PROVIDER) {
-        case 'anthropic': return streamAnthropic(history, onDelta);
-        case 'google':    return streamGoogle(history, onDelta);
-        case 'ollama':    return streamOllama(history, onDelta);
-        case 'openai':    return streamOpenAIish(history, 'https://api.openai.com/v1/chat/completions', onDelta);
-        case 'deepseek':  return streamOpenAIish(history, 'https://api.deepseek.com/chat/completions',  onDelta);
-        default:          return streamOpenAIish(history, '', onDelta);
+        case 'anthropic':   return streamAnthropic(history, onDelta);
+        case 'google':      return streamGoogle(history, onDelta);
+        case 'ollama':      return streamOllama(history, onDelta);
+        case 'openai':      return streamOpenAIish(history, 'https://api.openai.com/v1/chat/completions', onDelta);
+        case 'deepseek':    return streamOpenAIish(history, 'https://api.deepseek.com/chat/completions',  onDelta);
+        case 'groq':        return streamOpenAIish(history, 'https://api.groq.com/openai/v1/chat/completions', onDelta);
+        case 'openrouter':  return streamOpenAIish(history, 'https://openrouter.ai/api/v1/chat/completions',   onDelta);
+        case 'moonshot':    return streamOpenAIish(history, 'https://api.moonshot.cn/v1/chat/completions',     onDelta);
+        default:            return streamOpenAIish(history, chatEndpoint() || '', onDelta);
       }
     };
     res = await retrying(run, {

@@ -283,9 +283,12 @@ async function readBody(req, { maxBytes = 50 * 1024 * 1024 } = {}) {
 // ── OpenAI-compatible LLM caller for chat SSE ─────────────────────────────────
 
 function chatEndpoint() {
-  if (PROVIDER === 'deepseek') return 'https://api.deepseek.com/chat/completions';
-  if (PROVIDER === 'openai')   return 'https://api.openai.com/v1/chat/completions';
-  if (BASE_URL)                return `${BASE_URL.replace(/\/+$/, '')}/chat/completions`;
+  if (PROVIDER === 'deepseek')   return 'https://api.deepseek.com/chat/completions';
+  if (PROVIDER === 'openai')     return 'https://api.openai.com/v1/chat/completions';
+  if (PROVIDER === 'groq')       return 'https://api.groq.com/openai/v1/chat/completions';
+  if (PROVIDER === 'openrouter') return 'https://openrouter.ai/api/v1/chat/completions';
+  if (PROVIDER === 'moonshot')   return 'https://api.moonshot.cn/v1/chat/completions';
+  if (BASE_URL)                  return `${BASE_URL.replace(/\/+$/, '')}/chat/completions`;
   return null;
 }
 

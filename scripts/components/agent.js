@@ -27,6 +27,18 @@ const TOOL_TIMEOUT_MS = parseInt(process.env.GEOCLAW_TOOL_TIMEOUT_MS || '30000',
 const LLM_TIMEOUT_MS  = parseInt(process.env.GEOCLAW_LLM_TIMEOUT_MS  || '60000', 10);
 const MAX_SUBAGENT_DEPTH = parseInt(process.env.GEOCLAW_SUBAGENT_MAX_DEPTH || '2', 10);
 
+// ── Provider endpoint resolver ────────────────────────────────────────────────
+
+function resolveEndpoint(provider, baseUrl) {
+  if (provider === 'openai')      return 'https://api.openai.com/v1/chat/completions';
+  if (provider === 'deepseek')    return 'https://api.deepseek.com/chat/completions';
+  if (provider === 'groq')        return 'https://api.groq.com/openai/v1/chat/completions';
+  if (provider === 'openrouter')  return 'https://openrouter.ai/api/v1/chat/completions';
+  if (provider === 'moonshot')    return 'https://api.moonshot.cn/v1/chat/completions';
+  if (baseUrl) return `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
+  return null;
+}
+
 // ── Tool catalog ──────────────────────────────────────────────────────────────
 
 const toolDefinitions = [
@@ -508,17 +520,12 @@ async function retrying(fn, { retries = 3, baseDelayMs = 800, label = 'LLM call'
 async function chatWithTools(messages) {
   if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY not set — run: geoclaw setup');
 
-  const endpoint =
-    PROVIDER === 'openai'   ? 'https://api.openai.com/v1/chat/completions' :
-    PROVIDER === 'deepseek' ? 'https://api.deepseek.com/chat/completions'  :
-    BASE_URL                ? `${BASE_URL.replace(/\/+$/, '')}/chat/completions` :
-    null;
+  const endpoint = resolveEndpoint(PROVIDER, BASE_URL);
 
   if (!endpoint) {
     throw new Error(
-      `Agent mode requires an OpenAI-compatible provider (deepseek, openai, or custom).\n` +
-      `Your current provider is "${PROVIDER}". Tool-calling on ${PROVIDER} isn't supported yet.\n` +
-      `Run: geoclaw setup — and pick DeepSeek (option 1) or OpenAI (option 2).`,
+      `Agent mode requires an OpenAI-compatible provider.\n` +
+      `Your current provider is "${PROVIDER}". Run: geoclaw setup — and pick a supported provider.`,
     );
   }
 

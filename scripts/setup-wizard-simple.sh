@@ -177,13 +177,16 @@ setup_project() {
 setup_model() {
   print_section "2/10  LLM Model (REQUIRED — the AI brain)"
   echo "Which model provider do you want Geoclaw to use?"
-  echo "  1) DeepSeek    (cheap, fast, strong reasoning)"
-  echo "  2) OpenAI      (gpt-4o, gpt-4o-mini)"
-  echo "  3) Anthropic   (claude-sonnet-4, claude-opus-4)"
-  echo "  4) Google      (gemini-2.0-flash, gemini-pro)"
-  echo "  5) Ollama      (local models — free, private)"
-  echo "  6) Custom      (any OpenAI-compatible API)"
-  echo "  7) Skip        (configure later in .env)"
+  echo "  1) DeepSeek      (cheap, fast, strong reasoning)"
+  echo "  2) OpenAI        (gpt-4o, gpt-4o-mini)"
+  echo "  3) Anthropic     (claude-sonnet-4, claude-opus-4)"
+  echo "  4) Google        (gemini-2.0-flash, gemini-pro)"
+  echo "  5) Groq          (llama3, mixtral — ultra-fast inference)"
+  echo "  6) OpenRouter    (100+ models via one API key)"
+  echo "  7) Moonshot AI   (kimi — long-context, multilingual)"
+  echo "  8) Ollama        (local models — free, private)"
+  echo "  9) Custom        (any OpenAI-compatible API)"
+  echo " 10) Skip          (configure later in .env)"
 
   local choice
   choice=$(ask_input "Choice" "1")
@@ -192,29 +195,49 @@ setup_model() {
     1) set_env GEOCLAW_MODEL_PROVIDER "deepseek"
        local model; model=$(ask_input "Model name" "deepseek-chat")
        set_env GEOCLAW_MODEL_NAME "$model"
-       local key; key=$(ask_secret "DeepSeek API key")
+       local key; key=$(ask_secret "DeepSeek API key (platform.deepseek.com)")
        [[ -n "$key" ]] && set_env GEOCLAW_MODEL_API_KEY "$key" ;;
     2) set_env GEOCLAW_MODEL_PROVIDER "openai"
        local model; model=$(ask_input "Model name" "gpt-4o-mini")
        set_env GEOCLAW_MODEL_NAME "$model"
-       local key; key=$(ask_secret "OpenAI API key")
+       local key; key=$(ask_secret "OpenAI API key (platform.openai.com)")
        [[ -n "$key" ]] && set_env GEOCLAW_MODEL_API_KEY "$key" ;;
     3) set_env GEOCLAW_MODEL_PROVIDER "anthropic"
-       local model; model=$(ask_input "Model name" "claude-sonnet-4")
+       local model; model=$(ask_input "Model name" "claude-sonnet-4-5")
        set_env GEOCLAW_MODEL_NAME "$model"
-       local key; key=$(ask_secret "Anthropic API key")
+       local key; key=$(ask_secret "Anthropic API key (console.anthropic.com)")
        [[ -n "$key" ]] && set_env GEOCLAW_MODEL_API_KEY "$key" ;;
     4) set_env GEOCLAW_MODEL_PROVIDER "google"
        local model; model=$(ask_input "Model name" "gemini-2.0-flash")
        set_env GEOCLAW_MODEL_NAME "$model"
-       local key; key=$(ask_secret "Google API key")
+       local key; key=$(ask_secret "Google API key (aistudio.google.com)")
        [[ -n "$key" ]] && set_env GEOCLAW_MODEL_API_KEY "$key" ;;
-    5) set_env GEOCLAW_MODEL_PROVIDER "ollama"
+    5) set_env GEOCLAW_MODEL_PROVIDER "groq"
+       local model; model=$(ask_input "Model name" "llama-3.3-70b-versatile")
+       set_env GEOCLAW_MODEL_NAME "$model"
+       set_env GEOCLAW_MODEL_BASE_URL "https://api.groq.com/openai/v1"
+       local key; key=$(ask_secret "Groq API key (console.groq.com)")
+       [[ -n "$key" ]] && set_env GEOCLAW_MODEL_API_KEY "$key" ;;
+    6) set_env GEOCLAW_MODEL_PROVIDER "openrouter"
+       echo "  Popular models: openai/gpt-4o, anthropic/claude-3.5-sonnet, google/gemini-2.0-flash, meta-llama/llama-3.3-70b-instruct"
+       local model; model=$(ask_input "Model name" "openai/gpt-4o-mini")
+       set_env GEOCLAW_MODEL_NAME "$model"
+       set_env GEOCLAW_MODEL_BASE_URL "https://openrouter.ai/api/v1"
+       local key; key=$(ask_secret "OpenRouter API key (openrouter.ai/keys)")
+       [[ -n "$key" ]] && set_env GEOCLAW_MODEL_API_KEY "$key" ;;
+    7) set_env GEOCLAW_MODEL_PROVIDER "moonshot"
+       echo "  Models: moonshot-v1-8k  moonshot-v1-32k  moonshot-v1-128k"
+       local model; model=$(ask_input "Model name" "moonshot-v1-32k")
+       set_env GEOCLAW_MODEL_NAME "$model"
+       set_env GEOCLAW_MODEL_BASE_URL "https://api.moonshot.cn/v1"
+       local key; key=$(ask_secret "Moonshot API key (platform.moonshot.cn)")
+       [[ -n "$key" ]] && set_env GEOCLAW_MODEL_API_KEY "$key" ;;
+    8) set_env GEOCLAW_MODEL_PROVIDER "ollama"
        local model; model=$(ask_input "Model name" "llama3.2")
        set_env GEOCLAW_MODEL_NAME "$model"
        local url; url=$(ask_input "Ollama URL" "http://localhost:11434")
        set_env GEOCLAW_MODEL_BASE_URL "$url" ;;
-    6) local prov; prov=$(ask_input "Provider ID (e.g. mistral, groq)" "custom")
+    9) local prov; prov=$(ask_input "Provider ID (e.g. mistral, together)" "custom")
        set_env GEOCLAW_MODEL_PROVIDER "$prov"
        local model; model=$(ask_input "Model name" "")
        set_env GEOCLAW_MODEL_NAME "$model"
