@@ -474,8 +474,36 @@ setup_skills_tasks() {
   fi
 }
 
+setup_firecrawl() {
+  print_section "10/11  Firecrawl (advanced web scraping)"
+  echo "Firecrawl handles JavaScript-rendered sites, anti-bot pages, and whole-site crawling."
+  echo "Two options:"
+  echo "  1) Self-hosted (free, private) — needs Docker"
+  echo "     docker run -p 3002:3002 mendableai/firecrawl"
+  echo "  2) Firecrawl Cloud — needs an API key (firecrawl.dev)"
+  echo ""
+
+  if ask_yes_no "Enable Firecrawl?" "n"; then
+    local choice
+    choice=$(ask_input "Self-hosted (1) or Cloud (2)?" "1")
+    if [[ "$choice" == "2" ]]; then
+      local key; key=$(ask_secret "Firecrawl API key (FC-...)")
+      [[ -n "$key" ]] && set_env GEOCLAW_FIRECRAWL_API_KEY "$key"
+      set_env GEOCLAW_FIRECRAWL_BASE_URL "https://api.firecrawl.dev"
+      print_success "Firecrawl Cloud configured"
+    else
+      local url; url=$(ask_input "Firecrawl URL" "http://localhost:3002")
+      set_env GEOCLAW_FIRECRAWL_BASE_URL "$url"
+      print_success "Firecrawl self-hosted configured at $url"
+      print_info "Start Firecrawl with: docker run -p 3002:3002 mendableai/firecrawl"
+    fi
+  else
+    print_skip
+  fi
+}
+
 setup_security() {
-  print_section "10/10  Security (OneCLI Vault)"
+  print_section "11/11  Security (OneCLI Vault)"
 
   if ask_yes_no "Enable OneCLI Vault (credential encryption)?" "n"; then
     set_env GEOCLAW_ONECLI_ENABLED true
@@ -489,7 +517,7 @@ setup_security() {
 
 main() {
   print_header
-  echo "This wizard will configure all 10 Geoclaw component groups."
+  echo "This wizard will configure all 11 Geoclaw component groups."
   echo "Press Enter to accept the default for any prompt."
   echo ""
   echo -e "${CYAN}📖 Need help deciding? Read the setup guide:${NC}"
@@ -507,6 +535,7 @@ main() {
   setup_automation
   setup_geospatial
   setup_skills_tasks
+  setup_firecrawl
   setup_security
 
   echo ""

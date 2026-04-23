@@ -837,6 +837,19 @@ async function loadSettings() {
     }
   }
 
+  // Firecrawl status
+  const fcDiv = q('#firecrawl-status');
+  if (fcDiv) {
+    fcDiv.innerHTML = '<div class="fc-status fc-status--checking">Checking Firecrawl…</div>';
+    api('GET', '/api/firecrawl/ping').then(r => {
+      fcDiv.innerHTML = r.ok
+        ? `<div class="fc-status fc-status--ok">✓ Firecrawl reachable at ${r.base}</div>`
+        : `<div class="fc-status fc-status--off">✗ Firecrawl not running · <a href="https://github.com/mendableai/firecrawl" target="_blank" rel="noopener">Setup guide</a> · Start: <code>docker run -p 3002:3002 mendableai/firecrawl</code></div>`;
+    }).catch(() => {
+      fcDiv.innerHTML = '<div class="fc-status fc-status--off">✗ Firecrawl not running</div>';
+    });
+  }
+
   const sel = q('#ws-select');
   sel.innerHTML = '';
   for (const w of ME.workspaces || []) {
@@ -890,6 +903,8 @@ const I18N = {
     'browser.refs': 'Refs',
     'browser.fetching': 'Fetching…',
     'browser.error': 'Fetch failed',
+    'cap.firecrawl.title': 'Firecrawl scraper',
+    'cap.firecrawl.desc': 'Scrape JS-heavy pages, crawl whole sites, or map all URLs — handles anti-bot and SPA pages.',
     'browser.search': 'Search',
     'settings.setkey': 'Update API key',
     'settings.setkey.hint': 'Changes take effect immediately (saved to .env). Restart is not required.',
@@ -931,6 +946,8 @@ const I18N = {
     'browser.refs': 'רכיבים',
     'browser.fetching': 'מביא…',
     'browser.error': 'הבאה נכשלה',
+    'cap.firecrawl.title': 'גריד Firecrawl',
+    'cap.firecrawl.desc': 'גרדו דפים כבדי JavaScript, סרקו אתרים שלמים, או מפו את כל ה-URLs — מתמודד עם הגנות אנטי-בוט.',
     'browser.search': 'חפש',
     'settings.setkey': 'עדכון מפתח API',
     'settings.setkey.hint': 'השינויים נכנסים לתוקף מיד (נשמרים ל-.env). אין צורך להפעיל מחדש.',

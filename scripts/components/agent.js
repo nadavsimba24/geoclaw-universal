@@ -274,6 +274,61 @@ const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'firecrawl_scrape',
+      description:
+        'Scrape a single URL using Firecrawl — handles JavaScript-rendered pages, anti-bot measures, ' +
+        'and complex SPAs that our simple browser cannot. Returns clean markdown. ' +
+        'Requires Firecrawl running locally (docker run -p 3002:3002 mendableai/firecrawl) ' +
+        'or GEOCLAW_FIRECRAWL_API_KEY set for Firecrawl Cloud.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url:     { type: 'string', description: 'URL to scrape.' },
+          maxChars: { type: 'integer', description: 'Max markdown length (default 20000).' },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'firecrawl_crawl',
+      description:
+        'Crawl an entire website with Firecrawl — follows links depth-first and returns all pages as markdown. ' +
+        'Use this to index a whole site, extract product catalogs, or build a knowledge base. ' +
+        'Can take minutes for large sites. Requires Firecrawl.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url:      { type: 'string',  description: 'Root URL to crawl from.' },
+          limit:    { type: 'integer', description: 'Max pages to crawl (default 20).' },
+          maxDepth: { type: 'integer', description: 'Max link depth (default 3).' },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'firecrawl_map',
+      description:
+        'Map all URLs on a website with Firecrawl — fast, returns the full link graph without extracting content. ' +
+        'Use this to discover pages before deciding which to crawl or scrape. Requires Firecrawl.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url:               { type: 'string',  description: 'Root URL to map.' },
+          includeSubdomains: { type: 'boolean', description: 'Include subdomains (default false).' },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'web_search',
       description:
         'Search the web for current information. Returns a list of results with title, URL, and snippet. ' +
@@ -438,6 +493,18 @@ async function callTool(name, args, ctx) {
         const reply = await askUser(args.question, ctx.rl);
         return { ok: true, answer: reply };
       }
+      case 'firecrawl_scrape': {
+        const fc = require('./firecrawl.js');
+        return await fc.scrape(args.url, { maxChars: args.maxChars });
+      }
+      case 'firecrawl_crawl': {
+        const fc = require('./firecrawl.js');
+        return await fc.crawl(args.url, { limit: args.limit, maxDepth: args.maxDepth });
+      }
+      case 'firecrawl_map': {
+        const fc = require('./firecrawl.js');
+        return await fc.map(args.url, { includeSubdomains: args.includeSubdomains });
+      }
       case 'web_search': {
         const { webSearch } = require('./search.js');
         const res = await webSearch(args.query, { limit: args.limit });
@@ -589,6 +656,7 @@ Rules:
 - For complex multi-part goals, call 'spawn_subagent' with a narrower sub-goal.
 - To find information online, call 'web_search({query})' first — it returns URLs + snippets. Then call 'browse({url})' on the best result to read the full page.
 - To read a URL directly, call 'browse({url})'. Returns markdown with numbered refs like [link 7] you can cite. Pass useJina:true for JS-heavy pages.
+- For JavaScript-heavy pages or sites that block simple fetchers, use 'firecrawl_scrape({url})'. To crawl a whole site use 'firecrawl_crawl({url,limit})'. To list all URLs use 'firecrawl_map({url})'. Firecrawl must be running locally or GEOCLAW_FIRECRAWL_API_KEY must be set.
 - When the goal is complete, call 'finish' with a short summary for the user.
 - If you need user input and are told ask_user is unavailable, make the most reasonable decision and proceed.
 - Keep going until you call 'finish'. Don't give up quietly.

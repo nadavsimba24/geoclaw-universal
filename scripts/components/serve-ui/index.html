@@ -105,6 +105,11 @@
           <h3 data-i18n-text="cap.design.title">Design system</h3>
           <p data-i18n-text="cap.design.desc">Scaffold a DESIGN.md — Geoclaw themes the UI and generates on-brand components.</p>
         </button>
+        <button class="cap-card" data-cap-view="settings">
+          <div class="cap-icon">🕷️</div>
+          <h3 data-i18n-text="cap.firecrawl.title">Firecrawl scraper</h3>
+          <p data-i18n-text="cap.firecrawl.desc">Scrape JS-heavy pages, crawl whole sites, or map all URLs — handles anti-bot and SPA pages.</p>
+        </button>
         <button class="cap-card" data-cap-view="inbox">
           <div class="cap-icon">📥</div>
           <h3 data-i18n-text="cap.inbox.title">Activity inbox</h3>
@@ -295,12 +300,14 @@
         <h2>Supported providers</h2>
         <p class="hint">Set <code>GEOCLAW_MODEL_PROVIDER</code>, <code>GEOCLAW_MODEL_NAME</code>, and <code>GEOCLAW_MODEL_API_KEY</code> in your <code>.env</code> file, then restart the server. Or run <code>geoclaw setup</code> for an interactive wizard.</p>
         <div class="provider-table" id="provider-table"></div>
+        <div class="firecrawl-status" id="firecrawl-status"></div>
         <div class="key-form" id="key-form">
           <h3 data-i18n-text="settings.setkey">Update API key</h3>
           <p class="hint" data-i18n-text="settings.setkey.hint">Changes take effect immediately (saved to .env). Restart is not required.</p>
           <div class="inline-form">
             <select id="key-provider-select">
               <option value="GEOCLAW_MODEL_API_KEY">Model API key (active provider)</option>
+              <option value="GEOCLAW_FIRECRAWL_API_KEY">Firecrawl API key (Cloud)</option>
               <option value="GEOCLAW_BRAVE_API_KEY">Brave Search API key</option>
               <option value="GEOCLAW_SERPER_API_KEY">Serper.dev Search API key</option>
               <option value="GEOCLAW_MONDAY_API_TOKEN">Monday.com token</option>

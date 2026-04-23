@@ -925,6 +925,20 @@ body {
 }
 .jina-toggle input { accent-color: var(--neon-b); }
 
+/* ── Firecrawl status ─────────────────────────────────────────────────── */
+.fc-status {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+.fc-status--checking { color: var(--fg-dim); background: var(--bg-elev-2); border-color: var(--border-soft); }
+.fc-status--ok  { color: var(--success); background: rgba(126,194,142,0.08); border-color: rgba(126,194,142,0.25); }
+.fc-status--off { color: var(--fg-dim); background: var(--bg-elev-2); border-color: var(--border-soft); }
+.fc-status--off code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-elev); padding: 1px 5px; border-radius: 3px; }
+.fc-status a { color: var(--neon-b); }
+
 /* ── API key form ─────────────────────────────────────────────────────── */
 .key-form { margin-top: 20px; }
 .key-form h3 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }

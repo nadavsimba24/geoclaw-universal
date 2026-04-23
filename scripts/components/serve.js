@@ -347,6 +347,9 @@ const CHAT_TOOL_NAMES = new Set([
   'read_skill',
   'browse',
   'web_search',
+  'firecrawl_scrape',
+  'firecrawl_crawl',
+  'firecrawl_map',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
@@ -617,6 +620,36 @@ async function handle(req, res) {
   if (req.method === 'POST' && pathname === '/api/inbox/clear') {
     saveJSON(INBOX_FILE, []);
     return sendJSON(res, 200, { ok: true });
+  }
+
+  // ── /api/firecrawl ───────────────────────────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/firecrawl/ping') {
+    const fc = require('./firecrawl.js');
+    return sendJSON(res, 200, await fc.ping());
+  }
+  if (req.method === 'POST' && pathname === '/api/firecrawl/scrape') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.url) return sendJSON(res, 400, { ok: false, error: 'missing url' });
+    try {
+      const fc = require('./firecrawl.js');
+      return sendJSON(res, 200, await fc.scrape(body.url, { maxChars: body.maxChars }));
+    } catch (e) { return sendJSON(res, 502, { ok: false, error: e.message }); }
+  }
+  if (req.method === 'POST' && pathname === '/api/firecrawl/crawl') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.url) return sendJSON(res, 400, { ok: false, error: 'missing url' });
+    try {
+      const fc = require('./firecrawl.js');
+      return sendJSON(res, 200, await fc.crawl(body.url, { limit: body.limit, maxDepth: body.maxDepth }));
+    } catch (e) { return sendJSON(res, 502, { ok: false, error: e.message }); }
+  }
+  if (req.method === 'POST' && pathname === '/api/firecrawl/map') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.url) return sendJSON(res, 400, { ok: false, error: 'missing url' });
+    try {
+      const fc = require('./firecrawl.js');
+      return sendJSON(res, 200, await fc.map(body.url, { includeSubdomains: body.includeSubdomains }));
+    } catch (e) { return sendJSON(res, 502, { ok: false, error: e.message }); }
   }
 
   // ── /api/search ──────────────────────────────────────────────────────────

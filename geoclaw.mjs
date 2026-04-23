@@ -78,6 +78,7 @@ Commands:
   skills          Manage SKILL.md skills (list, add, bundles, create — from skills-il)
   browse <url>    Fetch a web page and extract readable markdown + typed refs
   search <query>  Search the web (DuckDuckGo free; Brave/Serper with API key)
+  firecrawl       Web scraping via Firecrawl (scrape, crawl, map)
   workspace       Manage workspaces (list, create, use, current, delete)
   start           Start Geoclaw agent platform
   setup           Interactive setup wizard
@@ -440,6 +441,10 @@ async function main() {
         break;
       }
       await runScript('components/browse.js', args.slice(1));
+      break;
+
+    case 'firecrawl':
+      await runScript('components/firecrawl.js', args.slice(1));
       break;
 
     case 'search':
