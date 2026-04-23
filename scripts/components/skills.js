@@ -38,6 +38,27 @@ const FOREIGN_GLOBAL_ROOTS = [
   path.join(os.homedir(), '.opencode', 'skills'),
   path.join(os.homedir(), '.openclaw', 'skills'),
 ];
+
+// Discover the OpenClaw package's bundled skills/ directory at runtime by
+// following the `openclaw` binary symlink to its real location.
+function findOpenClawBundledSkillsDir() {
+  try {
+    const isWin = process.platform === 'win32';
+    const whichCmd = isWin ? 'where.exe openclaw' : 'which openclaw';
+    const bin = spawnSync(isWin ? 'cmd' : 'sh',
+      isWin ? ['/c', whichCmd] : ['-c', whichCmd],
+      { encoding: 'utf8', timeout: 3000 }
+    ).stdout.trim().split('\n')[0].trim();
+    if (!bin || !fs.existsSync(bin)) return null;
+    // Follow symlinks: bin → e.g. ~/.hermes/node/lib/node_modules/openclaw/openclaw.mjs
+    const real = (() => { try { return fs.realpathSync(bin); } catch { return bin; } })();
+    // Try skills/ next to the main file, then one level up
+    for (const dir of [path.join(path.dirname(real), 'skills'), path.join(path.dirname(path.dirname(real)), 'skills')]) {
+      if (fs.existsSync(dir)) return dir;
+    }
+  } catch {}
+  return null;
+}
 const SKILLS_IL_PACKAGE = process.env.GEOCLAW_SKILLS_PACKAGE || 'skills-il';
 const NPX_TIMEOUT_MS    = parseInt(process.env.GEOCLAW_SKILLS_NPX_TIMEOUT_MS || '120000', 10);
 
@@ -106,6 +127,9 @@ function listSkills({ includeGlobal = true, includeProject = true, includeForeig
     for (const r of FOREIGN_GLOBAL_ROOTS) {
       if (fs.existsSync(r)) roots.push([r, 'global']);
     }
+    // OpenClaw bundled skills — discovered dynamically from the binary path
+    const ocBundled = findOpenClawBundledSkillsDir();
+    if (ocBundled) roots.push([ocBundled, 'global']);
   }
 
   const seen = new Set();
