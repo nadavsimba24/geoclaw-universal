@@ -639,6 +639,17 @@ async function handle(req, res) {
     catch (e) { return sendJSON(res, 400, { ok: false, error: e.message }); }
   }
 
+  // ── /api/memory ──────────────────────────────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/memory') {
+    const sessions = require('./sessions.js');
+    const n = parseInt(new URL(req.url, 'http://x').searchParams.get('n') || '50', 10);
+    return sendJSON(res, 200, { ok: true, sessions: sessions.list(n) });
+  }
+  if (req.method === 'DELETE' && pathname === '/api/memory') {
+    const sessions = require('./sessions.js');
+    return sendJSON(res, 200, sessions.clear());
+  }
+
   // ── /api/canvas ──────────────────────────────────────────────────────────
   if (req.method === 'GET' && pathname === '/api/canvas') {
     const canvas = require('./canvas.js');

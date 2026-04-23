@@ -523,6 +523,10 @@ async function main() {
       await runScript('components/approvals.js', args.slice(1));
       break;
 
+    case 'memory':
+      await runScript('components/sessions.js', args.slice(1));
+      break;
+
     case 'bot':
     case 'telegram-bot':
       await runScript('components/telegram-bot.js', args.slice(1));

@@ -114,7 +114,7 @@ q('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') clos
 
 // ── View switching ───────────────────────────────────────────────────────────
 
-const VIEWS = ['capabilities', 'chat', 'canvas', 'browser', 'inbox', 'agents', 'autopilots', 'files', 'skills', 'design', 'approvals', 'settings'];
+const VIEWS = ['capabilities', 'chat', 'canvas', 'browser', 'inbox', 'agents', 'autopilots', 'files', 'skills', 'design', 'approvals', 'memory', 'settings'];
 function showView(name) {
   for (const v of VIEWS) {
     const section = q(`.view[data-view="${v}"]`);
@@ -132,6 +132,7 @@ function showView(name) {
   if (name === 'design')     loadDesign();
   if (name === 'canvas')     loadCanvas();
   if (name === 'approvals')  loadApprovals();
+  if (name === 'memory')     loadMemory();
   if (name === 'settings')   loadSettings();
 }
 qa('.nav-item').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
@@ -971,6 +972,45 @@ qa('.policy-btn').forEach(btn => {
   });
 });
 q('#approvals-refresh')?.addEventListener('click', loadApprovals);
+
+// ── Session Memory ────────────────────────────────────────────────────────────
+
+async function loadMemory() {
+  const list = q('#memory-list');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const { sessions = [] } = await api('GET', '/api/memory?n=50');
+    list.innerHTML = '';
+    if (!sessions.length) {
+      list.appendChild(el('div', { class: 'empty' }, 'No session history yet. Run an agent task to start building memory.'));
+      return;
+    }
+    for (const s of sessions) {
+      const time = s.ts ? new Date(s.ts).toLocaleString() : '?';
+      const card = el('div', { class: 'card' },
+        el('div', { class: 'card-avatar' }, '🧠'),
+        el('div', {},
+          el('div', { class: 'card-title' }, s.userMsg ? String(s.userMsg).slice(0, 100) : '(no prompt)'),
+          s.summary ? el('div', { class: 'card-sub' }, s.summary.slice(0, 120)) : null,
+          el('div', { class: 'card-meta' },
+            time +
+            (s.toolsUsed?.length ? ` · tools: ${s.toolsUsed.slice(0,4).join(', ')}` : '') +
+            (s.filesEdited?.length ? ` · edited: ${s.filesEdited.slice(0,2).join(', ')}` : '') +
+            (s.workspace ? ` · workspace: ${s.workspace}` : '')
+          ),
+        ),
+      );
+      list.appendChild(card);
+    }
+  } catch (e) { list.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+
+q('#memory-refresh')?.addEventListener('click', loadMemory);
+q('#memory-clear')?.addEventListener('click', async () => {
+  if (!confirm('Clear all session memory?')) return;
+  try { await api('DELETE', '/api/memory'); toast('Session memory cleared', 'success'); loadMemory(); }
+  catch (e) { toast(e.message, 'error'); }
+});
 
 // ── Canvas ────────────────────────────────────────────────────────────────────
 

@@ -13,8 +13,9 @@ try {
   });
 } catch { /* dotenv is optional — env vars from the shell still work */ }
 
-const memory = require('./memory.js');
-const tts    = require('./tts.js');
+const memory   = require('./memory.js');
+const sessions = require('./sessions.js');
+const tts      = require('./tts.js');
 const skills = require('./skills.js');
 const { env } = require('./env.js');
 
@@ -731,11 +732,12 @@ async function runAgent(goal, opts = {}) {
     console.log(`\x1b[35m│ Goal: ${goal}\x1b[0m`);
   }
 
-  const ctx = { rl, done: false, summary: null, workspace, depth, interactive };
+  const ctx = { rl, done: false, summary: null, workspace, depth, interactive, toolsUsed: [], filesEdited: [] };
 
-  const skillsManifest = skills.buildSkillsManifest();
+  const skillsManifest  = skills.buildSkillsManifest();
+  const memorySummary   = depth === 0 ? sessions.buildContextSummary() : '';
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT + `\n\nActive workspace: ${workspace}` + skillsManifest },
+    { role: 'system', content: SYSTEM_PROMPT + `\n\nActive workspace: ${workspace}` + skillsManifest + memorySummary },
     { role: 'user',   content: `Goal: ${goal}` },
   ];
 
@@ -772,6 +774,7 @@ async function runAgent(goal, opts = {}) {
         catch { parsedArgs = {}; }
 
         console.log(`\x1b[34m  ⚙  ${call.function.name}(${JSON.stringify(parsedArgs).slice(0, 120)})\x1b[0m`);
+        if (!ctx.toolsUsed.includes(call.function.name)) ctx.toolsUsed.push(call.function.name);
         const result = await callTool(call.function.name, parsedArgs, ctx);
         const preview = JSON.stringify(result).slice(0, 160);
         console.log(`\x1b[90m     → ${preview}${preview.length >= 160 ? '...' : ''}\x1b[0m`);
@@ -779,7 +782,7 @@ async function runAgent(goal, opts = {}) {
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
-          content: JSON.stringify(result),
+          content: truncateToolResult(JSON.stringify(result)),
         });
 
         if (ctx.done) break;
@@ -796,10 +799,43 @@ async function runAgent(goal, opts = {}) {
       console.log(`\x1b[35m└── ${label} done: ${ctx.summary || '(no summary)'}\x1b[0m`);
     }
 
+    if (depth === 0) {
+      try {
+        sessions.write({
+          userMsg: goal,
+          toolsUsed: ctx.toolsUsed,
+          filesEdited: ctx.filesEdited,
+          summary: ctx.summary || (ctx.done ? 'completed' : 'hit step limit'),
+          workspace,
+        });
+      } catch {}
+    }
+
     return { done: ctx.done, summary: ctx.summary, stepsUsed };
   } finally {
     if (ownedRl) rl.close();
   }
+}
+
+// ── Context truncation (inspired by context-mode/mksglu) ─────────────────────
+// Prevents large tool outputs (web scrapes, file reads) from flooding the
+// context window and increasing token costs.
+const TOOL_RESULT_MAX_BYTES = parseInt(process.env.GEOCLAW_TOOL_RESULT_MAX_BYTES || '12288', 10);
+
+function truncateToolResult(text) {
+  if (!text) return text;
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (bytes <= TOOL_RESULT_MAX_BYTES) return text;
+  // Find a UTF-8-safe cut point using binary search
+  let lo = 0, hi = text.length;
+  const budget = TOOL_RESULT_MAX_BYTES - 40; // reserve space for marker
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (Buffer.byteLength(text.slice(0, mid)) <= budget) lo = mid;
+    else hi = mid - 1;
+  }
+  const omitted = bytes - Buffer.byteLength(text.slice(0, lo));
+  return text.slice(0, lo) + `\n… [truncated — ${omitted} bytes omitted]`;
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────────

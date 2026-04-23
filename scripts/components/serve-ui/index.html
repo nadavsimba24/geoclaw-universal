@@ -54,6 +54,9 @@
       <button class="nav-item" data-view="approvals">
         <span class="nav-icon">🔒</span><span data-i18n-text="nav.approvals">Approvals</span>
       </button>
+      <button class="nav-item" data-view="memory">
+        <span class="nav-icon">🧠</span><span data-i18n-text="nav.memory">Memory</span>
+      </button>
       <button class="nav-item" data-view="settings">
         <span class="nav-icon">⚙️</span><span data-i18n-text="nav.settings">Settings</span>
       </button>
@@ -340,6 +343,21 @@
       <div class="panel">
         <h2 data-i18n-text="approvals.tools">Tool overrides</h2>
         <div id="approvals-tools"></div>
+      </div>
+    </section>
+
+    <!-- ── MEMORY ───────────────────────────────────────────────────────── -->
+    <section class="view" data-view="memory" hidden>
+      <header class="view-header">
+        <h1>Session Memory</h1>
+        <div class="view-actions">
+          <button id="memory-refresh">Refresh</button>
+          <button id="memory-clear" class="danger">Clear All</button>
+        </div>
+      </header>
+      <p class="hint">Geoclaw remembers what agents did in recent sessions and injects that context automatically into future runs — so agents know your recent work without you repeating yourself.</p>
+      <div class="list" id="memory-list">
+        <div class="empty">No session history yet. Session memory builds up as you use the agent.</div>
       </div>
     </section>
 
