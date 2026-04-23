@@ -1,0 +1,257 @@
+# Default configuration for GLTF Pipeline Skill
+
+# Global settings
+units: meters
+source_crs: EPSG:4326  # WGS84 (longitude/latitude)
+target_crs: EPSG:2039  # Israel TM Grid (projected metric)
+output_origin_mode: local_origin  # Recenter coordinates for better precision
+realism_tier: 2  # 0-3 (higher = more detail)
+
+# Default values for missing properties
+defaults:
+  building_height: 4.0
+  level_height: 3.2
+  wall_width: 0.2
+  path_width: 1.5
+  path_thickness: 0.08
+  road_width: 6.0
+  road_thickness: 0.15
+  tree_canopy_diameter: 4.0
+  tree_trunk_height: 2.0
+  bench_width: 1.8
+  bench_depth: 0.6
+  bench_height: 0.9
+  light_pole_height: 6.0
+  light_pole_diameter: 0.15
+  parapet_height: 0.8
+  fence_height: 1.8
+  water_depth: 0.5
+
+# Default materials
+materials:
+  building: concrete_light
+  roof: roof_gray
+  wall: concrete_light
+  fence: wood_dark
+  path: pavers_beige
+  road: asphalt_dark
+  plaza: concrete_light
+  lawn: grass_green
+  water: water_blue
+  tree: vegetation_green
+  bench: wood_dark
+  light_pole: metal_gray
+  sign: metal_white
+
+# Roof types and defaults
+roof_types:
+  flat:
+    slope: 0.0
+    overhang: 0.5
+  gable:
+    slope: 30.0
+    ridge_height: 0.3
+  hip:
+    slope: 25.0
+  shed:
+    slope: 15.0
+    direction: 0.0  # degrees from north
+  dome:
+    segments: 16
+    height_factor: 0.5
+
+# Surface types
+surface_types:
+  asphalt:
+    thickness: 0.15
+    color: '#333333'
+  concrete:
+    thickness: 0.12
+    color: '#CCCCCC'
+  pavers:
+    thickness: 0.08
+    color: '#C2B280'
+  gravel:
+    thickness: 0.05
+    color: '#8B7355'
+  grass:
+    thickness: 0.0
+    color: '#4CAF50'
+  rubber:
+    thickness: 0.03
+    color: '#1A237E'
+
+# Asset library paths
+assets:
+  trees: assets/trees/
+  benches: assets/benches/
+  lights: assets/lights/
+  signs: assets/signs/
+  fences: assets/fences/
+  materials: assets/materials/
+
+# Quality settings
+quality:
+  triangulation_tolerance: 0.01
+  merge_tolerance: 0.001
+  max_triangle_size: 50.0
+  simplify_tolerance: 0.1
+  check_validity: true
+  repair_invalid: true
+  remove_duplicates: true
+
+# Export settings
+export:
+  embed_textures: true
+  compress_glb: true
+  generate_manifest: true
+  generate_qa_report: true
+  include_debug_layers: false
+  pretty_print_json: true
+  preserve_metadata: true
+
+# Performance settings
+performance:
+  max_features_per_batch: 1000
+  use_multiprocessing: false
+  cache_intermediate: true
+  memory_limit_mb: 4096
+
+# Debug settings
+debug:
+  log_level: INFO  # DEBUG, INFO, WARNING, ERROR
+  save_intermediate: false
+  visualize_steps: false
+  print_statistics: true
+
+# Class-specific defaults
+class_defaults:
+  building:
+    roof_type: flat
+    facade_style: modern
+    window_style: strip
+    parapet_height: 0.8
+  path:
+    surface: pavers
+    width: 1.5
+    thickness: 0.08
+  road:
+    surface: asphalt
+    width: 6.0
+    thickness: 0.15
+    curb_height: 0.12
+  tree:
+    species: generic
+    asset_id: tree_generic_medium
+    scale: 1.0
+  bench:
+    asset_id: bench_park
+    rotation: 0.0
+    scale: 1.0
+  light_pole:
+    asset_id: light_street
+    rotation: 0.0
+    scale: 1.0
+  water:
+    depth: 0.5
+    wave_pattern: false
+  wall:
+    width: 0.2
+    height: 1.4
+  fence:
+    width: 0.05
+    height: 1.8
+
+# Realism tier configurations
+realism_tiers:
+  tier_0:  # GIS block model
+    facade_detail: none
+    roof_detail: none
+    asset_detail: none
+    texture_detail: none
+    material_complexity: low
+    
+  tier_1:  # Stylized site model
+    facade_detail: basic
+    roof_detail: basic
+    asset_detail: basic
+    texture_detail: basic
+    material_complexity: medium
+    
+  tier_2:  # Near-SketchUp conceptual
+    facade_detail: procedural
+    roof_detail: detailed
+    asset_detail: detailed
+    texture_detail: detailed
+    material_complexity: high
+    
+  tier_3:  # Presentation model
+    facade_detail: custom
+    roof_detail: custom
+    asset_detail: custom
+    texture_detail: custom
+    material_complexity: very_high
+
+# Validation rules
+validation:
+  required_fields:
+    building: [class]
+    path: [class]
+    road: [class]
+    tree: [class]
+    bench: [class]
+  
+  value_ranges:
+    height:
+      min: 0.1
+      max: 1000.0
+    width:
+      min: 0.01
+      max: 100.0
+    levels:
+      min: 1
+      max: 200
+  
+  geometry_validation:
+    check_validity: true
+    repair_invalid: true
+    remove_duplicate_vertices: true
+    snap_tolerance: 0.001
+    zero_area_tolerance: 0.0001
+
+# CRS handling
+crs:
+  default_source_crs: EPSG:4326
+  processing_crs: EPSG:2039
+  detection:
+    epsg_field: crs
+    wkt_field: crs_wkt
+  mappings:
+    WGS84: EPSG:4326
+    UTM32N: EPSG:32632
+    UTM33N: EPSG:32633
+    IsraelTM: EPSG:2039
+    ITM: EPSG:2039
+
+# Metadata preservation
+metadata:
+  preserve_source_fields: true
+  prefix_source_fields: source_
+  include_in_extras: true
+  extras_fields: [id, class, name, source_layer, source_file]
+
+# Layer merging
+layer_merging:
+  enabled: true
+  merge_by_class: true
+  preserve_source_info: true
+  conflict_resolution: latest_wins  # latest_wins, first_wins, merge_properties
+
+# Profile for OpenClaw integration
+openclaw_profile:
+  auto_install_deps: true
+  check_deps_on_start: true
+  cache_conversions: true
+  max_concurrent: 1
+  timeout_seconds: 300
+  memory_warning_mb: 1024

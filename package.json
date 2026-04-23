@@ -48,7 +48,9 @@
   "files": [
     "geoclaw.mjs",
     "scripts/",
+    "skills/",
     "references/",
+    "skills-registry.json",
     "package.json",
     "README.md",
     "SKILL.md",

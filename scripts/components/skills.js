@@ -28,6 +28,9 @@ const { env } = require('./env.js');
 const GLOBAL_SKILLS  = path.join(os.homedir(), '.geoclaw', 'skills');
 const PROJECT_SKILLS_A = path.join(process.cwd(), '.geoclaw', 'skills');
 const PROJECT_SKILLS_B = path.join(process.cwd(), 'skills');
+// Skills bundled with the geoclaw package — always available, no extra install needed.
+const GEOCLAW_DIR    = process.env.GEOCLAW_DIR || path.join(__dirname, '..', '..');
+const BUNDLED_SKILLS = path.join(GEOCLAW_DIR, 'skills', 'bundled');
 // Other agents' global skill dirs — skills-il and similar installers drop
 // skills into these. We read them too so users don't need to manually mirror.
 const FOREIGN_GLOBAL_ROOTS = [
@@ -127,9 +130,12 @@ function listSkills({ includeGlobal = true, includeProject = true, includeForeig
     for (const r of FOREIGN_GLOBAL_ROOTS) {
       if (fs.existsSync(r)) roots.push([r, 'global']);
     }
-    // OpenClaw bundled skills — discovered dynamically from the binary path
+    // Skills shipped with the geoclaw package (skills/bundled/) — always available.
+    if (fs.existsSync(BUNDLED_SKILLS)) roots.push([BUNDLED_SKILLS, 'global']);
+    // OpenClaw bundled skills — discovered dynamically from the binary path.
+    // Skipped if openclaw isn't installed (findOpenClawBundledSkillsDir returns null).
     const ocBundled = findOpenClawBundledSkillsDir();
-    if (ocBundled) roots.push([ocBundled, 'global']);
+    if (ocBundled && ocBundled !== BUNDLED_SKILLS) roots.push([ocBundled, 'global']);
   }
 
   const seen = new Set();
