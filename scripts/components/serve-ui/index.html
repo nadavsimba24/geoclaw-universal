@@ -118,10 +118,17 @@
       <header class="view-header">
         <h1 data-i18n-text="browser.title">Browser</h1>
       </header>
-      <p class="hint" data-i18n-text="browser.hint">Fetch any URL. Geoclaw extracts the readable content as markdown with typed refs ([link 7], [button 9], [input text 12]) the agent can quote or describe.</p>
+      <p class="hint" data-i18n-text="browser.hint">Search the web or fetch a URL. Geoclaw extracts readable markdown with typed refs ([link 7], [button 9]) the agent can quote or describe.</p>
+      <form id="browser-search-form" class="browser-bar">
+        <input id="browser-search-input" type="text" placeholder="Search…" autocomplete="off" />
+        <button type="submit" class="ghost" data-i18n-text="browser.search">Search</button>
+      </form>
       <form id="browser-form" class="browser-bar">
         <input id="browser-url" type="url" placeholder="https://…" autocomplete="off" />
         <button type="submit" class="primary" data-i18n-text="browser.go">Fetch</button>
+        <label class="ghost jina-toggle" title="Use Jina AI reader (better for JS-heavy pages)">
+          <input type="checkbox" id="browser-jina" /> Jina
+        </label>
       </form>
       <div class="browser-layout">
         <article class="browser-content" id="browser-content">
@@ -288,6 +295,23 @@
         <h2>Supported providers</h2>
         <p class="hint">Set <code>GEOCLAW_MODEL_PROVIDER</code>, <code>GEOCLAW_MODEL_NAME</code>, and <code>GEOCLAW_MODEL_API_KEY</code> in your <code>.env</code> file, then restart the server. Or run <code>geoclaw setup</code> for an interactive wizard.</p>
         <div class="provider-table" id="provider-table"></div>
+        <div class="key-form" id="key-form">
+          <h3 data-i18n-text="settings.setkey">Update API key</h3>
+          <p class="hint" data-i18n-text="settings.setkey.hint">Changes take effect immediately (saved to .env). Restart is not required.</p>
+          <div class="inline-form">
+            <select id="key-provider-select">
+              <option value="GEOCLAW_MODEL_API_KEY">Model API key (active provider)</option>
+              <option value="GEOCLAW_BRAVE_API_KEY">Brave Search API key</option>
+              <option value="GEOCLAW_SERPER_API_KEY">Serper.dev Search API key</option>
+              <option value="GEOCLAW_MONDAY_API_TOKEN">Monday.com token</option>
+              <option value="GEOCLAW_TELEGRAM_BOT_TOKEN">Telegram bot token</option>
+            </select>
+          </div>
+          <div class="inline-form" style="margin-top:8px">
+            <input type="password" id="key-value-input" placeholder="sk-…" autocomplete="off" style="flex:1" />
+            <button id="key-save-btn" class="primary" data-i18n-text="settings.save">Save</button>
+          </div>
+        </div>
       </div>
       <div class="panel">
         <h2>Change workspace</h2>

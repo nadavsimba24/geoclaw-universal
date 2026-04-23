@@ -890,6 +890,10 @@ const I18N = {
     'browser.refs': 'Refs',
     'browser.fetching': 'Fetching…',
     'browser.error': 'Fetch failed',
+    'browser.search': 'Search',
+    'settings.setkey': 'Update API key',
+    'settings.setkey.hint': 'Changes take effect immediately (saved to .env). Restart is not required.',
+    'settings.save': 'Save',
   },
   he: {
     'nav.capabilities': 'יכולות',
@@ -927,6 +931,10 @@ const I18N = {
     'browser.refs': 'רכיבים',
     'browser.fetching': 'מביא…',
     'browser.error': 'הבאה נכשלה',
+    'browser.search': 'חפש',
+    'settings.setkey': 'עדכון מפתח API',
+    'settings.setkey.hint': 'השינויים נכנסים לתוקף מיד (נשמרים ל-.env). אין צורך להפעיל מחדש.',
+    'settings.save': 'שמור',
   },
 };
 
@@ -1022,14 +1030,83 @@ if (browserForm) {
     e.preventDefault();
     const url = q('#browser-url').value.trim();
     if (!url) return;
+    const useJina = q('#browser-jina')?.checked || false;
     browserContent.innerHTML = `<div class="empty">${t('browser.fetching')}</div>`;
     browserRefs.hidden = true;
     try {
-      const res = await api('POST', '/api/browse', { url });
+      const res = await api('POST', '/api/browse', { url, useJina });
       renderBrowserContent(res);
     } catch (err) {
       renderBrowserContent({ ok: false, error: err.message });
     }
+  });
+}
+
+const browserSearchForm = q('#browser-search-form');
+if (browserSearchForm) {
+  browserSearchForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const query = q('#browser-search-input').value.trim();
+    if (!query) return;
+    browserContent.innerHTML = `<div class="empty">${t('browser.fetching')}</div>`;
+    browserRefs.hidden = true;
+    try {
+      const res = await api('POST', '/api/search', { query });
+      if (!res.ok || !res.results?.length) {
+        browserContent.innerHTML = `<div class="empty">${t('browser.error')}: ${res.error || 'no results'}</div>`;
+        return;
+      }
+      browserContent.innerHTML = '';
+      const h = document.createElement('h2');
+      h.className = 'browser-page-title';
+      h.textContent = `Search: ${query}`;
+      browserContent.appendChild(h);
+      const meta = document.createElement('div');
+      meta.className = 'browser-meta';
+      meta.textContent = `${res.results.length} results via ${res.source}`;
+      browserContent.appendChild(meta);
+      const list = document.createElement('div');
+      list.className = 'search-results';
+      for (const r of res.results) {
+        const item = document.createElement('div');
+        item.className = 'search-result';
+        item.innerHTML = `
+          <div class="sr-title"></div>
+          <div class="sr-url"></div>
+          <div class="sr-snippet"></div>
+        `;
+        item.querySelector('.sr-title').textContent = r.title;
+        item.querySelector('.sr-url').textContent   = r.url;
+        item.querySelector('.sr-snippet').textContent = r.snippet;
+        if (r.url) {
+          item.style.cursor = 'pointer';
+          item.addEventListener('click', () => {
+            q('#browser-url').value = r.url;
+            browserForm.dispatchEvent(new Event('submit'));
+          });
+        }
+        list.appendChild(item);
+      }
+      browserContent.appendChild(list);
+    } catch (err) {
+      browserContent.innerHTML = `<div class="empty">${t('browser.error')}: ${err.message}</div>`;
+    }
+  });
+}
+
+// ── Settings: API key editor ──────────────────────────────────────────────────
+
+const keySaveBtn = q('#key-save-btn');
+if (keySaveBtn) {
+  keySaveBtn.addEventListener('click', async () => {
+    const key   = q('#key-provider-select').value;
+    const value = q('#key-value-input').value.trim();
+    if (!value) return toast('Enter a key value', 'error');
+    try {
+      await api('POST', '/api/settings/set-env', { key, value });
+      q('#key-value-input').value = '';
+      toast(`${key} saved`, 'success');
+    } catch (e) { toast(e.message, 'error'); }
   });
 }
 

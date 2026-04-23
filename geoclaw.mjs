@@ -77,6 +77,7 @@ Commands:
   memory          Manage the knowledge base (list, forget, stats, export, clear)
   skills          Manage SKILL.md skills (list, add, bundles, create — from skills-il)
   browse <url>    Fetch a web page and extract readable markdown + typed refs
+  search <query>  Search the web (DuckDuckGo free; Brave/Serper with API key)
   workspace       Manage workspaces (list, create, use, current, delete)
   start           Start Geoclaw agent platform
   setup           Interactive setup wizard
@@ -435,10 +436,20 @@ async function main() {
     case 'browse':
     case 'fetch':
       if (args.length < 2) {
-        console.log('Usage: geoclaw browse <url> [--format markdown|text|json] [--max N] [--refs]');
+        console.log('Usage: geoclaw browse <url> [--format markdown|text|json] [--max N] [--refs] [--jina]');
         break;
       }
       await runScript('components/browse.js', args.slice(1));
+      break;
+
+    case 'search':
+      if (args.length < 2) {
+        console.log('Usage: geoclaw search <query> [--json]');
+        console.log('       GEOCLAW_BRAVE_API_KEY=... geoclaw search <query>   (richer results)');
+        console.log('       GEOCLAW_SERPER_API_KEY=... geoclaw search <query>  (Google results)');
+        break;
+      }
+      await runScript('components/search.js', args.slice(1));
       break;
 
     case 'chat':

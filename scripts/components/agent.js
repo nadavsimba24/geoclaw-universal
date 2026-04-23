@@ -274,6 +274,25 @@ const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'web_search',
+      description:
+        'Search the web for current information. Returns a list of results with title, URL, and snippet. ' +
+        'Use this to find URLs before browsing, look up facts, check prices, find documentation, or research topics. ' +
+        'After getting results, call browse({url}) on the most relevant URL to read the full page. ' +
+        'No API key needed (uses DuckDuckGo). Set GEOCLAW_BRAVE_API_KEY or GEOCLAW_SERPER_API_KEY for richer results.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query in the language most likely to get good results.' },
+          limit: { type: 'integer', description: 'Max results to return (default 8).' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'browse',
       description:
         'Fetch a web page and return readable markdown with typed refs (`[link 7]`, `[button 9]`, `[input text 12]`, `[image 11]`). ' +
@@ -419,9 +438,14 @@ async function callTool(name, args, ctx) {
         const reply = await askUser(args.question, ctx.rl);
         return { ok: true, answer: reply };
       }
+      case 'web_search': {
+        const { webSearch } = require('./search.js');
+        const res = await webSearch(args.query, { limit: args.limit });
+        return res;
+      }
       case 'browse': {
         const { browse } = require('./browse.js');
-        const res = await browse(args.url, { maxChars: args.maxChars });
+        const res = await browse(args.url, { maxChars: args.maxChars, useJina: args.useJina });
         if (!res.ok) return { ok: false, error: res.error || 'browse failed' };
         return res;
       }
@@ -563,7 +587,8 @@ Rules:
 - Before answering factual questions, call 'recall' to check your workspace knowledge.
 - When you learn something reusable, call 'remember' to save it.
 - For complex multi-part goals, call 'spawn_subagent' with a narrower sub-goal.
-- To read a URL, summarize an article, check a page, or verify documentation, call 'browse({url})'. Returns markdown with numbered refs like [link 7] you can cite.
+- To find information online, call 'web_search({query})' first — it returns URLs + snippets. Then call 'browse({url})' on the best result to read the full page.
+- To read a URL directly, call 'browse({url})'. Returns markdown with numbered refs like [link 7] you can cite. Pass useJina:true for JS-heavy pages.
 - When the goal is complete, call 'finish' with a short summary for the user.
 - If you need user input and are told ask_user is unavailable, make the most reasonable decision and proceed.
 - Keep going until you call 'finish'. Don't give up quietly.

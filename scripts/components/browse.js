@@ -23,7 +23,7 @@ const DEFAULT_MAX = 20000;
 
 // ── HTTP fetch (follows redirects, handles gzip) ─────────────────────────────
 
-function fetchHtml(url, { userAgent = DEFAULT_UA, timeout = DEFAULT_TIMEOUT, redirects = 5 } = {}) {
+function fetchHtml(url, { userAgent = DEFAULT_UA, timeout = DEFAULT_TIMEOUT, redirects = 5, extraHeaders = {} } = {}) {
   return new Promise((resolve, reject) => {
     let u;
     try { u = new URL(url); } catch { return reject(new Error(`invalid URL: ${url}`)); }
@@ -37,12 +37,13 @@ function fetchHtml(url, { userAgent = DEFAULT_UA, timeout = DEFAULT_TIMEOUT, red
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'he,en-US;q=0.9,en;q=0.8',
         'Accept-Encoding': 'gzip, deflate',
+        ...extraHeaders,
       },
     }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
         res.resume();
         const next = new URL(res.headers.location, u).toString();
-        return fetchHtml(next, { userAgent, timeout, redirects: redirects - 1 }).then(resolve, reject);
+        return fetchHtml(next, { userAgent, timeout, redirects: redirects - 1, extraHeaders }).then(resolve, reject);
       }
       if (res.statusCode < 200 || res.statusCode >= 300) {
         res.resume();
@@ -314,10 +315,38 @@ function hasPlaywright() {
   try { require.resolve('playwright'); return true; } catch { return false; }
 }
 
+// ── Jina AI Reader (free, renders JS-heavy pages server-side) ────────────────
+
+async function browseJina(url, { maxChars = DEFAULT_MAX } = {}) {
+  const jinaUrl = `https://r.jina.ai/${url}`;
+  const { url: finalUrl, html: body, bytes, contentType } = await fetchHtml(jinaUrl, {
+    userAgent: DEFAULT_UA,
+    // Jina returns markdown directly with x-return-format header
+    extraHeaders: { 'X-Return-Format': 'markdown', 'Accept': 'text/markdown, text/plain, */*' },
+  });
+  const truncated = body.length > maxChars;
+  return {
+    ok: true,
+    url,
+    title: '',
+    markdown: truncated ? body.slice(0, maxChars) + '\n\n[...truncated]' : body,
+    refs: {},
+    bytes,
+    via: 'jina',
+  };
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 async function browse(url, opts = {}) {
-  const { maxChars = DEFAULT_MAX } = opts;
+  const { maxChars = DEFAULT_MAX, useJina = false } = opts;
+
+  // Jina reader mode: works on JS-heavy pages, returns clean markdown
+  if (useJina) {
+    try { return await browseJina(url, { maxChars }); }
+    catch(e) { /* fall through to normal fetch */ }
+  }
+
   const { url: finalUrl, html, bytes, contentType } = await fetchHtml(url, opts);
   const isHtml = /html|xml/i.test(contentType) || /^\s*</.test(html);
   if (!isHtml) {
@@ -337,9 +366,20 @@ async function browse(url, opts = {}) {
     bytes,
     lang,
   };
-  // Heuristic: SPA pages often return tiny HTML bodies after stripping.
-  if (!hasPlaywright() && markdown.length < 200 && bytes > 2000) {
-    out.hint = 'page looks JS-rendered (little static content). Install Playwright for click/type access: `npm i playwright && npx playwright install chromium`.';
+  // JS-rendered heuristic: try Jina automatically as fallback
+  if (markdown.length < 200 && bytes > 2000) {
+    try {
+      const jinaResult = await browseJina(url, { maxChars });
+      if (jinaResult.ok && jinaResult.markdown.length > markdown.length) {
+        jinaResult.title = title;
+        jinaResult.lang  = lang;
+        jinaResult.via   = 'jina-fallback';
+        return jinaResult;
+      }
+    } catch { /* use original */ }
+    if (!hasPlaywright()) {
+      out.hint = 'page looks JS-rendered (little static content). Try browse({url, useJina:true}) or install Playwright: `npm i playwright && npx playwright install chromium`.';
+    }
   }
   if (hasPlaywright()) out.playwright = true;
   return out;

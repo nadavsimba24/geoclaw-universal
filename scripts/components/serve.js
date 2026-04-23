@@ -346,12 +346,13 @@ const CHAT_TOOL_NAMES = new Set([
   'design_tokens', 'design_lint', 'design_diff', 'design_export', 'design_init', 'design_suggest',
   'read_skill',
   'browse',
+  'web_search',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
 const SYSTEM_PROMPT = `You are Geoclaw, a capable assistant with real tools for Monday.com, long-term memory, Telegram, and a design-system toolkit (DESIGN.md — colors, typography, components).
 
-When the user asks you to DO something — create Monday items, remember/recall, send Telegram, generate on-brand UI, read a URL — USE YOUR TOOLS. Don't tell them to run a shell command. For URLs and web pages, call browse({url}) to fetch readable markdown with typed refs like [link 7].
+When the user asks you to DO something — create Monday items, remember/recall, send Telegram, generate on-brand UI, search the web, read a URL — USE YOUR TOOLS. Don't tell them to run a shell command. To search the web call web_search({query}), then browse({url}) on the best result. For a direct URL call browse({url}) to get readable markdown with typed refs like [link 7].
 
 When a user asks you to design or build UI (dashboard, app, landing page, form), first check for DESIGN.md via design_tokens; if none exists, scaffold one with design_init (pick a template that fits the domain), then design_suggest your components using those tokens.
 
@@ -616,6 +617,44 @@ async function handle(req, res) {
   if (req.method === 'POST' && pathname === '/api/inbox/clear') {
     saveJSON(INBOX_FILE, []);
     return sendJSON(res, 200, { ok: true });
+  }
+
+  // ── /api/search ──────────────────────────────────────────────────────────
+  if (req.method === 'POST' && pathname === '/api/search') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.query) return sendJSON(res, 400, { ok: false, error: 'missing query' });
+    try {
+      const { webSearch } = require('./search.js');
+      const r = await webSearch(body.query, { limit: body.limit });
+      return sendJSON(res, r.ok ? 200 : 502, r);
+    } catch (e) {
+      return sendJSON(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  // ── /api/settings/set-env ────────────────────────────────────────────────
+  if (req.method === 'POST' && pathname === '/api/settings/set-env') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.key || !body.key.match(/^GEOCLAW_[A-Z0-9_]+$/)) {
+      return sendJSON(res, 400, { ok: false, error: 'invalid key name' });
+    }
+    try {
+      const fs   = require('fs');
+      const envPath = path.join(process.cwd(), '.env');
+      let content = '';
+      try { content = fs.readFileSync(envPath, 'utf8'); } catch { /* new file */ }
+      const lines = content.split('\n');
+      const prefix = `${body.key}=`;
+      const idx = lines.findIndex(l => l.startsWith(prefix));
+      const newLine = `${body.key}=${body.value || ''}`;
+      if (idx >= 0) lines[idx] = newLine;
+      else lines.push(newLine);
+      fs.writeFileSync(envPath, lines.join('\n'));
+      process.env[body.key] = body.value || '';
+      return sendJSON(res, 200, { ok: true });
+    } catch (e) {
+      return sendJSON(res, 500, { ok: false, error: e.message });
+    }
   }
 
   // ── /api/browse ──────────────────────────────────────────────────────────
