@@ -25,6 +25,10 @@
       <button class="nav-item active" data-view="chat">
         <span class="nav-icon">💬</span><span data-i18n-text="nav.chat">Chat</span>
       </button>
+      <button class="nav-item" data-view="canvas">
+        <span class="nav-icon">🖼️</span><span data-i18n-text="nav.canvas">Canvas</span>
+        <span class="badge" id="canvas-badge" hidden></span>
+      </button>
       <button class="nav-item" data-view="browser">
         <span class="nav-icon">🌐</span><span data-i18n-text="nav.browser">Browser</span>
       </button>
@@ -46,6 +50,9 @@
       </button>
       <button class="nav-item" data-view="design">
         <span class="nav-icon">🎨</span><span data-i18n-text="nav.design">Design</span>
+      </button>
+      <button class="nav-item" data-view="approvals">
+        <span class="nav-icon">🔒</span><span data-i18n-text="nav.approvals">Approvals</span>
       </button>
       <button class="nav-item" data-view="settings">
         <span class="nav-icon">⚙️</span><span data-i18n-text="nav.settings">Settings</span>
@@ -115,6 +122,21 @@
           <h3 data-i18n-text="cap.inbox.title">Activity inbox</h3>
           <p data-i18n-text="cap.inbox.desc">Every agent run, skill install, and file ingest lands here — a human-readable audit log.</p>
         </button>
+      </div>
+    </section>
+
+    <!-- ── CANVAS ──────────────────────────────────────────────────────── -->
+    <section class="view" data-view="canvas" hidden>
+      <header class="view-header">
+        <h1 data-i18n-text="canvas.title">Canvas</h1>
+        <div class="view-actions">
+          <button id="canvas-refresh">Refresh</button>
+          <button id="canvas-clear" class="ghost">Clear</button>
+        </div>
+      </header>
+      <p class="hint" data-i18n-text="canvas.hint">Agents push results, tables, and rich output here. Cards persist across sessions.</p>
+      <div class="canvas-grid" id="canvas-grid">
+        <div class="empty" data-i18n-text="canvas.empty">No canvas items yet. Ask an agent to summarize something or push a report.</div>
       </div>
     </section>
 
@@ -252,10 +274,25 @@
           <button id="skills-create" class="primary">+ Create</button>
         </div>
       </header>
-      <p class="hint">SKILL.md-format skills give Geoclaw domain expertise. Install from the <a href="https://github.com/skills-il" target="_blank" rel="noopener">skills-il</a> registry (Israeli tax, legal, accounting, government, localization) or create your own — Geoclaw sees them automatically in chat and agent runs.</p>
+      <p class="hint">SKILL.md-format skills give Geoclaw domain expertise. Install from the registry below or create your own — Geoclaw sees them automatically in chat and agent runs.</p>
+
+      <!-- Installed skills -->
       <div class="list" id="skills-list">
         <div class="empty">No skills installed yet.</div>
       </div>
+
+      <!-- Registry browser -->
+      <div class="registry-panel">
+        <h2 class="registry-title">📚 Public Registry</h2>
+        <div class="registry-search-row">
+          <input id="registry-q" class="registry-search" placeholder="Search skills (e.g. tax, vat, invoicing…)" />
+          <button id="registry-search-btn">Search</button>
+        </div>
+        <div class="registry-grid" id="registry-grid">
+          <div class="empty">Loading registry…</div>
+        </div>
+      </div>
+
       <div class="drawer" id="skill-drawer" hidden>
         <header class="drawer-header">
           <div>
@@ -280,6 +317,29 @@
       <p class="hint">A <code>DESIGN.md</code> in the current directory gives agents a consistent palette, typography, and components. The Geoclaw UI also reads it to theme itself.</p>
       <div class="panel" id="design-panel">
         <div class="empty">No DESIGN.md found. Click "+ Create DESIGN.md" to scaffold one.</div>
+      </div>
+    </section>
+
+    <!-- ── APPROVALS ─────────────────────────────────────────────────────── -->
+    <section class="view" data-view="approvals" hidden>
+      <header class="view-header">
+        <h1 data-i18n-text="approvals.title">Approvals</h1>
+        <div class="view-actions">
+          <button id="approvals-refresh">Refresh</button>
+        </div>
+      </header>
+      <p class="hint" data-i18n-text="approvals.hint">Control which tools agents are allowed to run. <b>Open</b>: all tools allowed. <b>Cautious</b>: external/destructive tools need approval. <b>Strict</b>: everything needs approval.</p>
+      <div class="panel">
+        <h2 data-i18n-text="approvals.policy">Policy</h2>
+        <div class="policy-btns" id="policy-btns">
+          <button class="policy-btn" data-policy="open">Open</button>
+          <button class="policy-btn" data-policy="cautious">Cautious</button>
+          <button class="policy-btn" data-policy="strict">Strict</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2 data-i18n-text="approvals.tools">Tool overrides</h2>
+        <div id="approvals-tools"></div>
       </div>
     </section>
 

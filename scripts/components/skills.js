@@ -181,6 +181,46 @@ function buildSkillsManifest({ max = 40 } = {}) {
   ].join('\n');
 }
 
+// ── Public skill registry ────────────────────────────────────────────────────
+
+const REGISTRY_LOCAL = path.join(__dirname, '..', '..', 'skills-registry.json');
+const REGISTRY_URL   = 'https://raw.githubusercontent.com/nadavsimba24/geoclaw-universal/main/skills-registry.json';
+
+async function fetchRegistry() {
+  // Prefer local copy (works offline; always up-to-date in dev).
+  if (fs.existsSync(REGISTRY_LOCAL)) {
+    try { return JSON.parse(fs.readFileSync(REGISTRY_LOCAL, 'utf8')); } catch {}
+  }
+  return httpJSON(REGISTRY_URL);
+}
+
+async function searchRegistry(query = '') {
+  const reg = await fetchRegistry();
+  const skills = Array.isArray(reg.skills) ? reg.skills : [];
+  if (!query) return { ok: true, skills };
+  const q = query.toLowerCase();
+  const matches = skills.filter(s => {
+    return (s.slug         || '').includes(q)
+        || (s.name_en      || '').toLowerCase().includes(q)
+        || (s.name_he      || '').includes(q)
+        || (s.description_en || '').toLowerCase().includes(q)
+        || (s.description_he || '').includes(q)
+        || (s.tags || []).some(t => t.includes(q))
+        || (s.bundle || '').includes(q);
+  });
+  return { ok: true, skills: matches, query };
+}
+
+async function installFromRegistry(slug, opts = {}) {
+  const reg = await fetchRegistry();
+  const entry = (reg.skills || []).find(s => s.slug === slug);
+  if (!entry) throw new Error(`skill "${slug}" not found in registry`);
+  if (entry.builtin) return { ok: true, builtin: true, message: `"${slug}" is a built-in capability, no installation needed.` };
+  if (entry.bundle) return installBundle(entry.bundle, opts);
+  if (entry.repo)   return addFromRegistry(entry.repo, opts);
+  throw new Error(`registry entry "${slug}" has no bundle or repo field`);
+}
+
 // ── npx skills-il wrapper ────────────────────────────────────────────────────
 
 function runNpx(args, { cwd = process.cwd(), timeoutMs = NPX_TIMEOUT_MS } = {}) {
@@ -667,8 +707,10 @@ function printUsage() {
 Commands:
   list                     List installed skills
   show <name>              Print a skill's SKILL.md
+  search [query]           Search the Geoclaw public registry
   add <source>             Install from a GitHub owner/repo, URL, or bare name
   install-bundle <slug>    Install a skill bundle (e.g. freelancer-accountant)
+  install-registry <slug>  Install a skill by slug from the public registry
   bundles                  List available bundles from the registry
   remove <name>            Remove an installed skill
   create                   Interactive wizard — describe it, get a SKILL.md
@@ -680,6 +722,8 @@ Flags for add / install-bundle:
   --agents <list>          Comma-sep list of agent targets (default: claude-code)
 
 Examples:
+  geoclaw skills search tax
+  geoclaw skills install-registry israeli-tax-returns
   geoclaw skills bundles
   geoclaw skills install-bundle freelancer-accountant
   geoclaw skills add skills-il/tax-and-finance
@@ -725,6 +769,41 @@ async function main(argv) {
     const body = readSkillBody(name);
     if (!body) { console.log(`No skill named "${name}". Try:  geoclaw skills list`); return; }
     console.log(body);
+    return;
+  }
+
+  if (cmd === 'search') {
+    const query = positional.join(' ');
+    try {
+      const r = await searchRegistry(query);
+      if (!r.skills.length) { console.log(query ? `No results for "${query}".` : 'Registry is empty.'); return; }
+      console.log(`\n📚 Registry${query ? ` — "${query}"` : ''} (${r.skills.length} results):\n`);
+      for (const s of r.skills) {
+        const icon = s.icon || '📦';
+        const name = s.name_en || s.slug;
+        const desc = (s.description_en || '').slice(0, 100);
+        const tags = (s.tags || []).join(', ');
+        console.log(`  ${icon} ${name} (${s.slug})`);
+        if (desc) console.log(`     ${desc}`);
+        if (tags) console.log(`     tags: ${tags}`);
+        if (s.bundle) console.log(`     bundle: ${s.bundle}`);
+        console.log();
+      }
+      console.log(`Install:  geoclaw skills install-registry <slug>`);
+    } catch (e) { console.error('❌', e.message); process.exitCode = 1; }
+    return;
+  }
+
+  if (cmd === 'install-registry') {
+    const slug = positional[0];
+    if (!slug) { console.log('Usage: geoclaw skills install-registry <slug>\n  See available skills:  geoclaw skills search'); return; }
+    console.log(`📦 Installing "${slug}" from registry...`);
+    try {
+      const r = await installFromRegistry(slug, { scope: flags.scope });
+      if (r.builtin) { console.log(`ℹ  ${r.message}`); return; }
+      if (r.ok) console.log(`✅ Installed "${slug}".`);
+      else { console.log(`⚠  Partial install.`); process.exitCode = 1; }
+    } catch (e) { console.error('❌', e.message); process.exitCode = 1; }
     return;
   }
 
@@ -820,6 +899,9 @@ module.exports = {
   addFromRegistry,
   installBundle,
   listBundles,
+  searchRegistry,
+  installFromRegistry,
+  fetchRegistry,
   createSkill,
   createInteractive,
   llmDraft,

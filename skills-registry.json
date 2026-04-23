@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "updated": "2026-04-23",
+  "skills": [
+    {
+      "slug": "israeli-tax-returns",
+      "name_en": "Israeli Tax Returns",
+      "name_he": "דוח מס הכנסה ישראלי",
+      "description_en": "Step-by-step guidance for filing Israeli annual income tax returns (Form 1301). Covers deductions, credits, brackets, and deadlines.",
+      "description_he": "הנחיות שלב אחר שלב להגשת דוח שנתי לרשות המיסים (טופס 1301). כולל ניכויים, זיכויים, מדרגות מס ומועדים.",
+      "tags": ["tax", "israel", "income-tax", "accounting"],
+      "bundle": "israeli-tax-season",
+      "icon": "🧾",
+      "repo": "skills-il/israeli-tax-returns"
+    },
+    {
+      "slug": "israeli-vat-reporting",
+      "name_en": "Israeli VAT Reporting",
+      "name_he": "דיווח מע״מ ישראלי",
+      "description_en": "Complete guidance for Israeli VAT (מע״מ) reporting, including periodic returns, exemptions, and zero-rated transactions.",
+      "description_he": "הנחיות מלאות לדיווח מע״מ בישראל, כולל דוחות תקופתיים, פטורים ועסקאות בשיעור אפס.",
+      "tags": ["vat", "israel", "tax", "accounting"],
+      "bundle": "israeli-tax-season",
+      "icon": "📊",
+      "repo": "skills-il/israeli-vat-reporting"
+    },
+    {
+      "slug": "israeli-tax-withholding",
+      "name_en": "Israeli Tax Withholding",
+      "name_he": "ניכוי מס במקור",
+      "description_en": "Guidance on Israeli tax withholding (ניכוי מס במקור) for employers and service providers.",
+      "description_he": "הנחיות לניכוי מס במקור למעסיקים ולנותני שירותים.",
+      "tags": ["withholding", "israel", "tax", "payroll"],
+      "bundle": "israeli-tax-season",
+      "icon": "💼",
+      "repo": "skills-il/israeli-tax-withholding"
+    },
+    {
+      "slug": "israeli-expense-categorizer",
+      "name_en": "Israeli Expense Categorizer",
+      "name_he": "סיווג הוצאות עסקיות",
+      "description_en": "Categorize business expenses according to Israeli tax law — deductible vs. non-deductible, partial deductions.",
+      "description_he": "סיווג הוצאות עסקיות לפי דיני המס הישראלי — הוצאות מוכרות, לא מוכרות וניכוי חלקי.",
+      "tags": ["expenses", "israel", "tax", "accounting"],
+      "bundle": "israeli-tax-season",
+      "icon": "🗂️",
+      "repo": "skills-il/israeli-expense-categorizer"
+    },
+    {
+      "slug": "israeli-corporate-tax",
+      "name_en": "Israeli Corporate Tax Strategy",
+      "name_he": "מס חברות ישראלי",
+      "description_en": "Corporate tax strategy for Israeli companies — rates, allowances, R&D credits, and preferred enterprise regimes.",
+      "description_he": "אסטרטגיית מס חברות לחברות ישראליות — שיעורים, קיזוזים, זיכויי מו״פ ומפעלים מועדפים.",
+      "tags": ["corporate-tax", "israel", "strategy"],
+      "bundle": "israeli-tax-season",
+      "icon": "🏢",
+      "repo": "skills-il/israeli-corporate-tax-strategy"
+    },
+    {
+      "slug": "geoclaw-web-search",
+      "name_en": "Web Search & Browse",
+      "name_he": "חיפוש וגלישה",
+      "description_en": "Search the web with DuckDuckGo/Brave and browse any URL with readable markdown extraction and typed refs.",
+      "description_he": "חיפוש ברשת עם DuckDuckGo/Brave וגלישה לכל URL עם חילוץ Markdown קריא וסימוני רכיבים.",
+      "tags": ["web", "search", "browse", "built-in"],
+      "builtin": true,
+      "icon": "🌐"
+    },
+    {
+      "slug": "geoclaw-firecrawl",
+      "name_en": "Firecrawl Web Scraper",
+      "name_he": "Firecrawl גרידת אתרים",
+      "description_en": "Scrape JS-heavy pages, crawl entire sites, or map all URLs via Firecrawl (self-hosted or cloud).",
+      "description_he": "גרידת דפים כבדי JavaScript, סריקת אתרים שלמים ומיפוי URL-ים עם Firecrawl.",
+      "tags": ["scraping", "crawl", "firecrawl", "built-in"],
+      "builtin": true,
+      "icon": "🕷️"
+    },
+    {
+      "slug": "geoclaw-monday",
+      "name_en": "Monday.com Integration",
+      "name_he": "אינטגרציית Monday.com",
+      "description_en": "List boards, read items, create tasks, and comment on Monday.com directly from chat or agents.",
+      "description_he": "עיון בלוחות, קריאת פריטים, יצירת משימות ותגובה ב-Monday.com ישירות מהצ׳אט או הסוכנים.",
+      "tags": ["monday", "project-management", "built-in"],
+      "builtin": true,
+      "icon": "📋"
+    },
+    {
+      "slug": "geoclaw-telegram",
+      "name_en": "Telegram Bot",
+      "name_he": "בוט טלגרם",
+      "description_en": "Send and receive Telegram messages via bot. Agents can notify users or respond to incoming messages.",
+      "description_he": "שליחה וקבלה של הודעות טלגרם דרך בוט. סוכנים יכולים להתריע למשתמשים.",
+      "tags": ["telegram", "messaging", "built-in"],
+      "builtin": true,
+      "icon": "✈️"
+    }
+  ]
+}

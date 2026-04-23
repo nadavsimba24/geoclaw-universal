@@ -350,6 +350,7 @@ const CHAT_TOOL_NAMES = new Set([
   'firecrawl_scrape',
   'firecrawl_crawl',
   'firecrawl_map',
+  'canvas_write',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
@@ -622,6 +623,41 @@ async function handle(req, res) {
     return sendJSON(res, 200, { ok: true });
   }
 
+  // ── /api/approvals ───────────────────────────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/approvals') {
+    const { getConfig } = require('./approvals.js');
+    return sendJSON(res, 200, { ok: true, ...getConfig() });
+  }
+  if (req.method === 'POST' && pathname === '/api/approvals/policy') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    try { return sendJSON(res, 200, require('./approvals.js').setPolicy(body.policy)); }
+    catch (e) { return sendJSON(res, 400, { ok: false, error: e.message }); }
+  }
+  if (req.method === 'POST' && pathname === '/api/approvals/override') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    try { return sendJSON(res, 200, require('./approvals.js').setOverride(body.tool, body.decision)); }
+    catch (e) { return sendJSON(res, 400, { ok: false, error: e.message }); }
+  }
+
+  // ── /api/canvas ──────────────────────────────────────────────────────────
+  if (req.method === 'GET' && pathname === '/api/canvas') {
+    const canvas = require('./canvas.js');
+    const qs = new URL(req.url, `http://x`).searchParams;
+    return sendJSON(res, 200, { ok: true, items: canvas.list({ limit: parseInt(qs.get('limit') || '50', 10) }) });
+  }
+  if (req.method === 'POST' && pathname === '/api/canvas') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    try { return sendJSON(res, 200, require('./canvas.js').write(body)); }
+    catch (e) { return sendJSON(res, 400, { ok: false, error: e.message }); }
+  }
+  if (req.method === 'POST' && pathname === '/api/canvas/clear') {
+    return sendJSON(res, 200, require('./canvas.js').clear());
+  }
+  if (req.method === 'DELETE' && pathname.startsWith('/api/canvas/')) {
+    const id = pathname.slice('/api/canvas/'.length);
+    return sendJSON(res, 200, require('./canvas.js').remove(id));
+  }
+
   // ── /api/firecrawl ───────────────────────────────────────────────────────
   if (req.method === 'GET' && pathname === '/api/firecrawl/ping') {
     const fc = require('./firecrawl.js');
@@ -770,6 +806,17 @@ async function handle(req, res) {
     } catch (e) {
       return sendJSON(res, 500, { ok: false, error: e.message });
     }
+  }
+  if (req.method === 'GET' && pathname === '/api/skills/registry') {
+    const q = (new URL(req.url, 'http://x').searchParams.get('q') || '').trim();
+    try { return sendJSON(res, 200, await skills.searchRegistry(q)); }
+    catch (e) { return sendJSON(res, 500, { ok: false, error: e.message }); }
+  }
+  if (req.method === 'POST' && pathname === '/api/skills/install-registry') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!body.slug) return sendJSON(res, 400, { ok: false, error: 'missing slug' });
+    try { return sendJSON(res, 200, await skills.installFromRegistry(body.slug, { scope: body.scope || 'global' })); }
+    catch (e) { return sendJSON(res, 500, { ok: false, error: e.message }); }
   }
   if (req.method === 'DELETE' && pathname.startsWith('/api/skills/')) {
     const name = decodeURIComponent(pathname.slice('/api/skills/'.length));

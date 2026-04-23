@@ -114,7 +114,7 @@ q('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') clos
 
 // ── View switching ───────────────────────────────────────────────────────────
 
-const VIEWS = ['capabilities', 'chat', 'browser', 'inbox', 'agents', 'autopilots', 'files', 'skills', 'design', 'settings'];
+const VIEWS = ['capabilities', 'chat', 'canvas', 'browser', 'inbox', 'agents', 'autopilots', 'files', 'skills', 'design', 'approvals', 'settings'];
 function showView(name) {
   for (const v of VIEWS) {
     const section = q(`.view[data-view="${v}"]`);
@@ -128,8 +128,10 @@ function showView(name) {
   if (name === 'agents')     loadAgents();
   if (name === 'autopilots') loadAutopilots();
   if (name === 'files')      loadFiles();
-  if (name === 'skills')     loadSkills();
+  if (name === 'skills')     { loadSkills(); loadRegistry(); }
   if (name === 'design')     loadDesign();
+  if (name === 'canvas')     loadCanvas();
+  if (name === 'approvals')  loadApprovals();
   if (name === 'settings')   loadSettings();
 }
 qa('.nav-item').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
@@ -693,6 +695,60 @@ async function loadSkills() {
 }
 q('#skills-refresh').addEventListener('click', loadSkills);
 
+// ── Registry browser ─────────────────────────────────────────────────────────
+
+async function loadRegistry(query = '') {
+  const grid = q('#registry-grid');
+  grid.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const qs = query ? `?q=${encodeURIComponent(query)}` : '';
+    const { skills: entries = [] } = await api('GET', `/api/skills/registry${qs}`);
+    grid.innerHTML = '';
+    if (!entries.length) {
+      grid.appendChild(el('div', { class: 'empty' }, query ? `No results for "${query}".` : 'Registry is empty.'));
+      return;
+    }
+    for (const s of entries) {
+      const isBuiltin = !!s.builtin;
+      const card = el('div', { class: 'reg-card' },
+        el('div', { class: 'reg-card-icon' }, s.icon || '📦'),
+        el('div', { class: 'reg-card-body' },
+          el('div', { class: 'reg-card-name' }, s.name_en || s.slug),
+          s.name_he ? el('div', { class: 'reg-card-name-he' }, s.name_he) : null,
+          el('div', { class: 'reg-card-desc' }, s.description_en || ''),
+          el('div', { class: 'reg-card-tags' },
+            ...(s.tags || []).map(t => el('span', { class: 'reg-tag' }, t)),
+            s.bundle ? el('span', { class: 'reg-tag reg-tag--bundle' }, `bundle: ${s.bundle}`) : null,
+          ),
+        ),
+        el('div', { class: 'reg-card-actions' },
+          isBuiltin
+            ? el('span', { class: 'reg-builtin-badge' }, 'Built-in')
+            : el('button', { class: 'primary', onclick: () => installFromRegistryUI(s.slug) }, 'Install'),
+        ),
+      );
+      grid.appendChild(card);
+    }
+  } catch (e) { grid.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+
+async function installFromRegistryUI(slug) {
+  toast(`Installing "${slug}"…`, 'info', 4000);
+  try {
+    const r = await api('POST', '/api/skills/install-registry', { slug });
+    if (r.builtin) { toast(r.message, 'info'); return; }
+    toast(`"${slug}" installed!`, 'success');
+    loadSkills();
+  } catch (e) { toast(`Install failed: ${e.message}`, 'error', 8000); }
+}
+
+q('#registry-search-btn').addEventListener('click', () => {
+  loadRegistry(q('#registry-q').value.trim());
+});
+q('#registry-q').addEventListener('keydown', e => {
+  if (e.key === 'Enter') loadRegistry(q('#registry-q').value.trim());
+});
+
 async function openSkillDrawer(name) {
   try {
     const { name: n, body } = await api('GET', `/api/skills/show/${encodeURIComponent(name)}`);
@@ -864,11 +920,165 @@ q('#ws-use').addEventListener('click', async () => {
   catch (e) { toast(e.message, 'error'); }
 });
 
+// ── Approvals ─────────────────────────────────────────────────────────────────
+
+const ALL_TOOLS = [
+  'remember','recall','web_search','browse','firecrawl_scrape','firecrawl_crawl','firecrawl_map',
+  'send_telegram','monday_list_boards','monday_get_board','monday_create_item',
+  'canvas_write','read_skill','spawn_subagent','ask_user','speak',
+  'design_tokens','design_lint','design_diff','design_export','design_init','design_suggest',
+];
+const EXTERNAL_TOOLS = new Set(['send_telegram','monday_create_item','firecrawl_crawl','web_search','browse','firecrawl_scrape','firecrawl_map']);
+
+async function loadApprovals() {
+  try {
+    const r = await api('GET', '/api/approvals');
+    const policy = r.policy || 'open';
+    qa('.policy-btn').forEach(b => b.classList.toggle('active', b.dataset.policy === policy));
+    const container = q('#approvals-tools');
+    if (!container) return;
+    container.innerHTML = '';
+    for (const tool of ALL_TOOLS) {
+      const override = r.overrides?.[tool];
+      const isExternal = EXTERNAL_TOOLS.has(tool);
+      const row = document.createElement('div');
+      row.className = 'approval-row';
+      row.innerHTML = `
+        <span class="approval-tool">${tool}</span>
+        <span class="approval-tag ${isExternal ? 'approval-tag--ext' : 'approval-tag--safe'}">${isExternal ? 'external' : 'safe'}</span>
+        <div class="approval-btns">
+          <button class="approval-btn ${override==='allow'?'active-allow':''}" data-tool="${tool}" data-decision="allow">Allow</button>
+          <button class="approval-btn ${override==='deny'?'active-deny':''}" data-tool="${tool}" data-decision="deny">Deny</button>
+          <button class="approval-btn ${!override?'active-default':''}" data-tool="${tool}" data-decision="remove">Default</button>
+        </div>
+      `;
+      container.appendChild(row);
+    }
+    qa('.approval-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await api('POST', '/api/approvals/override', { tool: btn.dataset.tool, decision: btn.dataset.decision });
+        loadApprovals();
+      });
+    });
+  } catch(e) { /* approvals unavailable */ }
+}
+
+qa('.policy-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    await api('POST', '/api/approvals/policy', { policy: btn.dataset.policy });
+    toast(`Policy set to ${btn.dataset.policy}`, 'success');
+    loadApprovals();
+  });
+});
+q('#approvals-refresh')?.addEventListener('click', loadApprovals);
+
+// ── Canvas ────────────────────────────────────────────────────────────────────
+
+let canvasItems = [];
+let canvasPollTimer = null;
+
+function renderCanvasItem(item) {
+  const card = document.createElement('div');
+  card.className = `canvas-card canvas-card--${item.type}`;
+  card.dataset.id = item.id;
+
+  const hdr = document.createElement('div');
+  hdr.className = 'canvas-card-header';
+
+  const titleEl = document.createElement('span');
+  titleEl.className = 'canvas-card-title';
+  titleEl.textContent = item.title || item.type;
+
+  const meta = document.createElement('span');
+  meta.className = 'canvas-card-meta';
+  meta.textContent = `${item.agent} · ${item.ts ? item.ts.slice(0, 16).replace('T',' ') : ''}`;
+
+  const del = document.createElement('button');
+  del.className = 'canvas-card-del ghost';
+  del.textContent = '×';
+  del.addEventListener('click', async () => {
+    await api('DELETE', `/api/canvas/${item.id}`);
+    card.remove();
+  });
+
+  hdr.appendChild(titleEl);
+  hdr.appendChild(meta);
+  hdr.appendChild(del);
+  card.appendChild(hdr);
+
+  const body = document.createElement('div');
+  body.className = 'canvas-card-body';
+
+  if (item.type === 'html') {
+    const shadow = document.createElement('div');
+    shadow.innerHTML = item.content;
+    body.appendChild(shadow);
+  } else if (item.type === 'code') {
+    const pre = document.createElement('pre');
+    pre.className = 'canvas-code';
+    pre.textContent = item.content;
+    body.appendChild(pre);
+  } else {
+    body.innerHTML = mdRender(item.content);
+  }
+
+  card.appendChild(body);
+  return card;
+}
+
+async function loadCanvas() {
+  const grid = q('#canvas-grid');
+  if (!grid) return;
+  try {
+    const r = await api('GET', '/api/canvas?limit=50');
+    canvasItems = r.items || [];
+    grid.innerHTML = '';
+    if (!canvasItems.length) {
+      grid.innerHTML = `<div class="empty">${t('canvas.empty')}</div>`;
+      q('#canvas-badge') && (q('#canvas-badge').hidden = true);
+      return;
+    }
+    for (const item of canvasItems) grid.appendChild(renderCanvasItem(item));
+    const badge = q('#canvas-badge');
+    if (badge) { badge.textContent = canvasItems.length; badge.hidden = false; }
+  } catch(e) { /* ignore */ }
+}
+
+// Poll canvas every 5s when visible
+function startCanvasPoll() {
+  stopCanvasPoll();
+  canvasPollTimer = setInterval(() => {
+    if (q('.view[data-view="canvas"]')?.hidden === false) loadCanvas();
+  }, 5000);
+}
+function stopCanvasPoll() {
+  if (canvasPollTimer) { clearInterval(canvasPollTimer); canvasPollTimer = null; }
+}
+
+q('#canvas-refresh')?.addEventListener('click', loadCanvas);
+q('#canvas-clear')?.addEventListener('click', async () => {
+  if (!confirm('Clear all canvas items?')) return;
+  await api('POST', '/api/canvas/clear');
+  await loadCanvas();
+  toast('Canvas cleared', 'success');
+});
+
 // ── i18n (English / Hebrew) ──────────────────────────────────────────────────
 
 const I18N = {
   en: {
     'nav.capabilities': 'Capabilities',
+    'nav.approvals': 'אישורים',
+    'approvals.title': 'אישורים',
+    'approvals.hint': 'שלטו באילו כלים מותר לסוכנים להפעיל. פתוח: הכל מותר. זהיר: כלים חיצוניים דורשים אישור. מחמיר: הכל דורש אישור.',
+    'approvals.policy': 'מדיניות',
+    'approvals.tools': 'עקיפות לכלים',
+    'nav.canvas': 'לוח',
+    'canvas.title': 'לוח',
+    'canvas.hint': 'סוכנים דוחפים תוצאות, טבלאות ופלט עשיר לכאן. הכרטיסים נשמרים בין סשנים.',
+    'canvas.empty': 'הלוח ריק. בקשו מסוכן לסכם משהו או לדחוף דוח.',
+    'cap.canvas.title': 'לוח',
+    'cap.canvas.desc': 'סוכנים דוחפים תוצאות, סיכומים, טבלאות ופלט עשיר ללוח ויזואלי חי.',
     'nav.chat': 'Chat',
     'nav.browser': 'Browser',
     'nav.inbox': 'Inbox',
@@ -880,6 +1090,17 @@ const I18N = {
     'nav.settings': 'Settings',
     'cap.title': 'What Geoclaw can do',
     'cap.subtitle': 'A universal agent for Israeli organizations — chat, autonomous agents, web browsing, skills, and more, all local and private.',
+    'nav.approvals': 'Approvals',
+    'approvals.title': 'Approvals',
+    'approvals.hint': 'Control which tools agents are allowed to run. Open: all tools allowed. Cautious: external tools need approval. Strict: everything needs approval.',
+    'approvals.policy': 'Policy',
+    'approvals.tools': 'Tool overrides',
+    'nav.canvas': 'Canvas',
+    'canvas.title': 'Canvas',
+    'canvas.hint': 'Agents push results, tables, and rich output here. Cards persist across sessions.',
+    'canvas.empty': 'No canvas items yet. Ask an agent to summarize something or push a report.',
+    'cap.canvas.title': 'Canvas',
+    'cap.canvas.desc': 'Agents push results, summaries, tables, and rich output to a live visual board.',
     'cap.chat.title': 'Smart chat',
     'cap.chat.desc': 'Talk to your LLM with knowledge-base memory and real tools (Monday, Telegram, design-system).',
     'cap.agents.title': 'Autonomous agents',
@@ -1134,5 +1355,7 @@ if (keySaveBtn) {
   await loadMe();
   const initial = location.hash.replace('#','') || 'capabilities';
   showView(VIEWS.includes(initial) ? initial : 'capabilities');
-  loadInbox();  // so badge reflects backlog
+  loadInbox();
+  loadCanvas();
+  startCanvasPoll();
 })();

@@ -367,6 +367,27 @@ const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'canvas_write',
+      description:
+        'Push a card to the Geoclaw Canvas — a live visual board the user watches in their browser. ' +
+        'Use this to show results, summaries, tables, charts, or any rich output that should persist beyond the chat. ' +
+        'type can be "markdown" (default), "html" (raw HTML snippet), "code" (syntax-highlighted), or "table" (markdown table). ' +
+        'Call this for any output worth keeping — not just terminal text.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'The content to display (markdown, html, or code).' },
+          title:   { type: 'string', description: 'Short title for the card.' },
+          type:    { type: 'string', enum: ['markdown', 'html', 'table', 'code'], description: 'Content type (default markdown).' },
+          tags:    { type: 'array', items: { type: 'string' }, description: 'Optional tags for filtering.' },
+        },
+        required: ['content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'finish',
       description: 'Declare the goal complete with a short summary for the user.',
       parameters: {
@@ -405,6 +426,13 @@ function withTimeout(promise, ms, label) {
 async function callTool(name, args, ctx) {
   const check = preflight(name);
   if (!check.ok) return check;
+
+  // Exec approval check
+  try {
+    const { isAllowed } = require('./approvals.js');
+    const approval = isAllowed(name);
+    if (!approval.allowed) return { ok: false, error: approval.message };
+  } catch { /* approvals module missing — allow all */ }
 
   const runner = async () => {
     switch (name) {
@@ -492,6 +520,10 @@ async function callTool(name, args, ctx) {
         }
         const reply = await askUser(args.question, ctx.rl);
         return { ok: true, answer: reply };
+      }
+      case 'canvas_write': {
+        const canvas = require('./canvas.js');
+        return canvas.write({ content: args.content, title: args.title, type: args.type, tags: args.tags, agent: 'agent' });
       }
       case 'firecrawl_scrape': {
         const fc = require('./firecrawl.js');
@@ -656,6 +688,7 @@ Rules:
 - For complex multi-part goals, call 'spawn_subagent' with a narrower sub-goal.
 - To find information online, call 'web_search({query})' first — it returns URLs + snippets. Then call 'browse({url})' on the best result to read the full page.
 - To read a URL directly, call 'browse({url})'. Returns markdown with numbered refs like [link 7] you can cite. Pass useJina:true for JS-heavy pages.
+- Use 'canvas_write({content, title, type})' to push important results to the visual Canvas board that the user sees in their browser. Use it for summaries, tables, and any output worth keeping.
 - For JavaScript-heavy pages or sites that block simple fetchers, use 'firecrawl_scrape({url})'. To crawl a whole site use 'firecrawl_crawl({url,limit})'. To list all URLs use 'firecrawl_map({url})'. Firecrawl must be running locally or GEOCLAW_FIRECRAWL_API_KEY must be set.
 - When the goal is complete, call 'finish' with a short summary for the user.
 - If you need user input and are told ask_user is unavailable, make the most reasonable decision and proceed.

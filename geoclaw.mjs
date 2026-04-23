@@ -72,6 +72,7 @@ Commands:
   ingest <file>   Ingest a document (.txt/.md/.pdf/.docx/.xlsx/.csv) into the knowledge base
   upload          Start the local web UI for managing the knowledge base
   serve           Start the Geoclaw web dashboard (chat, agents, autopilots, files)
+  daemon          Background daemon (start|stop|restart|status|logs|install)
   bot             Start the Telegram bot (needs GEOCLAW_TELEGRAM_BOT_TOKEN)
   say <text>      Speak text out loud (text-to-speech)
   memory          Manage the knowledge base (list, forget, stats, export, clear)
@@ -508,6 +509,18 @@ async function main() {
     case 'ui':
     case 'dashboard':
       await runScript('components/serve.js', args.slice(1));
+      break;
+
+    case 'daemon':
+      await runScript('components/daemon.js', args.slice(1));
+      break;
+
+    case 'canvas':
+      await runScript('components/canvas.js', args.slice(1));
+      break;
+
+    case 'approvals':
+      await runScript('components/approvals.js', args.slice(1));
       break;
 
     case 'bot':

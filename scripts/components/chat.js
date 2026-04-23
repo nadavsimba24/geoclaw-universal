@@ -87,6 +87,7 @@ const CHAT_TOOL_NAMES = new Set([
   'firecrawl_scrape',
   'firecrawl_crawl',
   'firecrawl_map',
+  'canvas_write',
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
