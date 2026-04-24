@@ -1,0 +1,17 @@
+[general]
+name=AI Edit (Nano Banana 2)
+description=AI-powered aerial image editing using Nano Banana 2 (Google Gemini). Select, describe, transform. Georeferenced output.
+about=Select a region on your map, describe what you want to change with natural language, and AI Edit transforms it. Powered by Google's Nano Banana 2 model. Keeps geographic position (georeferenced).
+version=1.0.0
+qgisMinimumVersion=3.0
+qgisMaximumVersion=3.99
+author=TerraLab Community Edition
+email=geoclaw@geoclaw.ai
+icon=icon.png
+category=Vector
+experimental=True
+deprecated=False
+repository=https://github.com/nadavsimba24/geoclaw-universal
+tags=AI,image editing,generation,nano banana,gemini,orthophoto,aerial,drone
+homepage=https://terra-lab.ai/ai-edit
+tracker=https://github.com/nadavsimba24/geoclaw-universal/issues
