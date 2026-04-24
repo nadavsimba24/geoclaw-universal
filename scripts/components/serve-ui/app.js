@@ -255,6 +255,280 @@ q('#chat-clear').addEventListener('click', () => {
   renderKeyBanner();
 });
 
+// ── Slash commands ────────────────────────────────────────────────────────────
+
+const SLASH_COMMANDS = [
+  { cmd: '/help',       args: '',           desc: 'Show all available slash commands' },
+  { cmd: '/model',      args: '<name>',     desc: 'Switch model — e.g. /model gpt-4o' },
+  { cmd: '/provider',   args: '<name>',     desc: 'Switch provider — deepseek · openai · groq · openrouter · moonshot · ollama' },
+  { cmd: '/key',        args: '<apikey>',   desc: 'Set API key for current provider' },
+  { cmd: '/models',     args: '',           desc: 'List known models for current provider' },
+  { cmd: '/clear',      args: '',           desc: 'Clear chat history' },
+  { cmd: '/new',        args: '',           desc: 'Start a new conversation' },
+  { cmd: '/workspace',  args: '<name>',     desc: 'Switch workspace' },
+  { cmd: '/sys',        args: '<text>',     desc: 'Prepend a system instruction to the next message' },
+  { cmd: '/agent',      args: '<goal>',     desc: 'Run an autonomous agent task' },
+  { cmd: '/skills',     args: '',           desc: 'List installed skills' },
+  { cmd: '/memory',     args: '',           desc: 'Show recent session memory' },
+  { cmd: '/web',        args: '<query>',    desc: 'Web search directly from chat' },
+  { cmd: '/browse',     args: '<url>',      desc: 'Browse a URL and show content' },
+  { cmd: '/canvas',     args: '',           desc: 'Open the Canvas view' },
+  { cmd: '/settings',   args: '',           desc: 'Open Settings' },
+];
+
+const KNOWN_MODELS = {
+  deepseek:   ['deepseek-chat', 'deepseek-reasoner'],
+  openai:     ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o3-mini'],
+  groq:       ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+  openrouter: ['anthropic/claude-sonnet-4-6', 'google/gemini-2.5-flash', 'meta-llama/llama-3.3-70b-instruct', 'deepseek/deepseek-chat'],
+  moonshot:   ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+  ollama:     ['llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'phi4:14b', 'gemma3:12b'],
+};
+
+const PROVIDER_KEY_NAMES = {
+  deepseek:   'GEOCLAW_DEEPSEEK_API_KEY',
+  openai:     'GEOCLAW_OPENAI_API_KEY',
+  groq:       'GEOCLAW_GROQ_API_KEY',
+  openrouter: 'GEOCLAW_OPENROUTER_API_KEY',
+  moonshot:   'GEOCLAW_MOONSHOT_API_KEY',
+};
+
+let slashMenuIdx = -1;
+let pendingSysMsg = null;
+
+function buildSlashMenu(filter) {
+  const menu = q('#slash-menu');
+  const matches = filter === '/'
+    ? SLASH_COMMANDS
+    : SLASH_COMMANDS.filter(c => c.cmd.startsWith(filter.split(' ')[0]));
+  if (!matches.length) { menu.hidden = true; return; }
+  slashMenuIdx = -1;
+  menu.innerHTML = '';
+  matches.forEach((c, i) => {
+    const row = el('div', { class: 'slash-row', 'data-idx': String(i) },
+      el('span', { class: 'slash-cmd' }, c.cmd),
+      c.args ? el('span', { class: 'slash-args' }, c.args) : null,
+      el('span', { class: 'slash-desc' }, c.desc),
+    );
+    row.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      applySlashCompletion(c);
+    });
+    menu.appendChild(row);
+  });
+  menu.hidden = false;
+}
+
+function applySlashCompletion(c) {
+  const inp = q('#chat-input');
+  inp.value = c.args ? `${c.cmd} ` : c.cmd;
+  q('#slash-menu').hidden = true;
+  slashMenuIdx = -1;
+  inp.focus();
+}
+
+function slashMenuNavigate(dir) {
+  const rows = qa('.slash-row', q('#slash-menu'));
+  if (!rows.length) return false;
+  rows[slashMenuIdx]?.classList.remove('active');
+  slashMenuIdx = Math.max(0, Math.min(rows.length - 1, slashMenuIdx + dir));
+  rows[slashMenuIdx].classList.add('active');
+  return true;
+}
+
+function closeSlashMenu() {
+  q('#slash-menu').hidden = true;
+  slashMenuIdx = -1;
+}
+
+// Returns true if message was a slash command (handled locally — don't send to LLM).
+async function handleSlashCommand(text) {
+  const parts = text.trim().split(/\s+/);
+  const cmd   = parts[0].toLowerCase();
+  const arg   = parts.slice(1).join(' ').trim();
+
+  if (cmd === '/help') {
+    const lines = SLASH_COMMANDS.map(c => `<b>${c.cmd}</b>${c.args ? ' <i>'+c.args+'</i>' : ''} — ${c.desc}`);
+    renderMsg('assistant', '').querySelector('.msg-body').innerHTML =
+      `<div class="slash-help">${lines.join('<br>')}</div>`;
+    return true;
+  }
+
+  if (cmd === '/clear' || cmd === '/new') {
+    chatHistory.length = 0;
+    q('#chat-messages').innerHTML = '';
+    toast('Chat cleared', 'success');
+    return true;
+  }
+
+  if (cmd === '/model') {
+    if (!arg) {
+      const cur = ME?.model || '?';
+      const prov = ME?.provider || '?';
+      const known = (KNOWN_MODELS[prov] || []).map(m => `<code>${m}</code>`).join(' · ');
+      renderMsg('assistant', '').querySelector('.msg-body').innerHTML =
+        `Current model: <b>${cur}</b> (${prov})<br>Known models: ${known || 'any'}`;
+      return true;
+    }
+    await setEnv('GEOCLAW_MODEL_NAME', arg);
+    if (ME) ME.model = arg;
+    q('#provider-chip').textContent = `${ME?.provider || '?'} · ${arg}`;
+    toast(`Model → ${arg}`, 'success');
+    return true;
+  }
+
+  if (cmd === '/provider') {
+    if (!arg) {
+      renderMsg('assistant', '').querySelector('.msg-body').innerHTML =
+        `Current provider: <b>${ME?.provider || '?'}</b><br>Available: deepseek · openai · groq · openrouter · moonshot · ollama`;
+      return true;
+    }
+    await setEnv('GEOCLAW_MODEL_PROVIDER', arg.toLowerCase());
+    if (ME) ME.provider = arg.toLowerCase();
+    q('#provider-chip').textContent = `${arg.toLowerCase()} · ${ME?.model || '?'}`;
+    toast(`Provider → ${arg}`, 'success');
+    return true;
+  }
+
+  if (cmd === '/key') {
+    if (!arg) { toast('Usage: /key <your-api-key>', 'error'); return true; }
+    const prov = ME?.provider || 'deepseek';
+    const envKey = PROVIDER_KEY_NAMES[prov] || 'GEOCLAW_MODEL_API_KEY';
+    await setEnv(envKey, arg);
+    await setEnv('GEOCLAW_MODEL_API_KEY', arg);
+    toast(`API key saved for ${prov}`, 'success');
+    return true;
+  }
+
+  if (cmd === '/models') {
+    const prov = ME?.provider || 'deepseek';
+    const known = KNOWN_MODELS[prov] || [];
+    renderMsg('assistant', '').querySelector('.msg-body').innerHTML =
+      known.length
+        ? `Known models for <b>${prov}</b>:<br>${known.map(m => `<code>${m}</code>`).join('<br>')}`
+        : `No preset models for <b>${prov}</b>. Use /model &lt;name&gt; to set any model name.`;
+    return true;
+  }
+
+  if (cmd === '/workspace') {
+    if (!arg) {
+      renderMsg('assistant', '').querySelector('.msg-body').innerHTML =
+        `Current workspace: <b>${ME?.workspace || 'default'}</b>`;
+      return true;
+    }
+    await api('POST', '/api/workspaces/use', { name: arg });
+    if (ME) ME.workspace = arg;
+    q('#workspace-chip').textContent = `workspace: ${arg}`;
+    toast(`Workspace → ${arg}`, 'success');
+    return true;
+  }
+
+  if (cmd === '/sys') {
+    if (!arg) { toast('Usage: /sys <instruction>', 'error'); return true; }
+    pendingSysMsg = arg;
+    toast(`System instruction set for next message: "${arg.slice(0, 60)}"`, 'info', 4000);
+    return true;
+  }
+
+  if (cmd === '/agent') {
+    if (!arg) { toast('Usage: /agent <goal>', 'error'); return true; }
+    const node = renderMsg('assistant', '');
+    node.querySelector('.msg-body').textContent = `🤖 Running agent: "${arg}"…`;
+    try {
+      const r = await api('POST', '/api/agents/run', { goal: arg });
+      node.querySelector('.msg-body').textContent = r.summary || 'Agent finished.';
+    } catch (e) { node.querySelector('.msg-body').textContent = `Agent error: ${e.message}`; }
+    return true;
+  }
+
+  if (cmd === '/skills') {
+    showView('skills');
+    return true;
+  }
+
+  if (cmd === '/memory') {
+    showView('memory');
+    return true;
+  }
+
+  if (cmd === '/canvas') {
+    showView('canvas');
+    return true;
+  }
+
+  if (cmd === '/settings') {
+    showView('settings');
+    return true;
+  }
+
+  if (cmd === '/web') {
+    if (!arg) { toast('Usage: /web <query>', 'error'); return true; }
+    const node = renderMsg('assistant', '');
+    node.querySelector('.msg-body').textContent = `🔍 Searching "${arg}"…`;
+    try {
+      const r = await api('POST', '/api/search', { query: arg, limit: 5 });
+      const results = r.results || [];
+      node.querySelector('.msg-body').innerHTML = results.length
+        ? results.map(x => `<b><a href="${x.url}" target="_blank" rel="noopener">${x.title}</a></b><br><small>${x.url}</small><br>${x.snippet || ''}`).join('<hr>')
+        : 'No results.';
+    } catch (e) { node.querySelector('.msg-body').textContent = `Search error: ${e.message}`; }
+    return true;
+  }
+
+  if (cmd === '/browse') {
+    if (!arg) { toast('Usage: /browse <url>', 'error'); return true; }
+    const node = renderMsg('assistant', '');
+    node.querySelector('.msg-body').textContent = `🌐 Fetching ${arg}…`;
+    try {
+      const r = await api('POST', '/api/browse', { url: arg });
+      node.querySelector('.msg-body').textContent = (r.markdown || r.text || 'No content.').slice(0, 3000);
+    } catch (e) { node.querySelector('.msg-body').textContent = `Browse error: ${e.message}`; }
+    return true;
+  }
+
+  return false; // not a slash command we handle — let it go to the LLM
+}
+
+async function setEnv(key, value) {
+  await api('POST', '/api/settings/set-env', { key, value });
+}
+
+// Wire slash menu to the chat input
+q('#chat-input').addEventListener('input', () => {
+  const ta  = q('#chat-input');
+  const val = ta.value;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+  if (val.startsWith('/')) buildSlashMenu(val);
+  else closeSlashMenu();
+});
+
+q('#chat-input').addEventListener('keydown', (e) => {
+  const menu = q('#slash-menu');
+  if (!menu.hidden) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); slashMenuNavigate(1); return; }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); slashMenuNavigate(-1); return; }
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      const active = q('.slash-row.active', menu);
+      if (active) {
+        e.preventDefault();
+        const idx = parseInt(active.dataset.idx);
+        applySlashCompletion(SLASH_COMMANDS.find((c, i) => i === idx) || SLASH_COMMANDS[idx]);
+        return;
+      }
+    }
+    if (e.key === 'Escape') { closeSlashMenu(); return; }
+  }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    q('#chat-composer').requestSubmit();
+  }
+});
+
+q('#chat-input').addEventListener('blur', () => {
+  setTimeout(() => closeSlashMenu(), 150);
+});
+
 q('#chat-composer').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = q('#chat-input').value.trim();
@@ -266,14 +540,32 @@ q('#chat-composer').addEventListener('submit', async (e) => {
     return;
   }
 
+  // Handle slash commands locally — don't send to LLM
+  if (text.startsWith('/')) {
+    q('#chat-input').value = '';
+    q('#chat-input').style.height = 'auto';
+    closeSlashMenu();
+    const handled = await handleSlashCommand(text);
+    if (handled) return;
+  }
+
   q('#chat-input').value = '';
   q('#chat-input').style.height = 'auto';
+  closeSlashMenu();
+
+  // Inject pending system instruction if set via /sys
+  const messages = [...chatHistory];
+  if (pendingSysMsg) {
+    messages.push({ role: 'system', content: pendingSysMsg });
+    pendingSysMsg = null;
+  }
+
   chatHistory.push({ role: 'user', content: text });
   renderMsg('user', text);
   const assistantNode = renderMsg('assistant', '');
   q('#chat-send').disabled = true;
 
-  const source = apiEventSource('/api/chat', { messages: chatHistory });
+  const source = apiEventSource('/api/chat', { messages });
   let acc = '';
   let gotContent = false;
   let errored = false;
@@ -329,17 +621,6 @@ q('#chat-composer').addEventListener('submit', async (e) => {
   });
 });
 
-q('#chat-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    q('#chat-composer').requestSubmit();
-  }
-});
-q('#chat-input').addEventListener('input', () => {
-  const ta = q('#chat-input');
-  ta.style.height = 'auto';
-  ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
-});
 
 // ── Inbox ────────────────────────────────────────────────────────────────────
 
