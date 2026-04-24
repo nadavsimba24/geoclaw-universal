@@ -1,12 +1,12 @@
 ---
-name: geoclaw
-description: Build and bootstrap Geoclaw — a complete automation platform that runs fully via CLI, accepts Telegram + WhatsApp + Slack + Signal chat, integrates with n8n, QGIS/PostGIS, Monday.com, Salesforce, and provides magic workflows that span multiple systems. Enhanced with features from nanoclaw and latest OpenClaw versions. Use when you need to create a universal agent platform with transparent integration and educational user experience.
+name: antonclaw
+description: AntónClaw — Gilfoyle's unholy daemon. OpenClaw fork with full provider freedom (DeepSeek, Groq, Kimi, Anthropic, Ollama), Monday.com, n8n, QGIS/PostGIS, Telegram, Salesforce, and magic workflows spanning multiple systems. Terminal UI inspired by Silicon Valley. Use when you need a universal agent platform that works on cheap models and has enterprise integrations.
 ---
 
-# Geoclaw Skill Guide v3.0 - Universal Agent Platform
+# AntónClaw — Gilfoyle's Unholy Daemon
 
 ## Overview
-Geoclaw v3.0 is a **complete automation platform** that integrates with the entire local developer/analyst stack. It provides **magic workflows** that span multiple systems (n8n, QGIS/PostGIS, web scraping, enterprise systems) with **transparent integration** and **educational user experience**. Users clearly understand and experience each component while enjoying seamless automation across their entire toolchain.
+AntónClaw is an **OpenClaw fork** built for operators who refuse to pay $200/month for a model. It runs on DeepSeek, Groq, Kimi, or any OpenAI-compatible API while providing enterprise integrations (Monday.com, n8n, QGIS/PostGIS) and a terminal UI that would make Gilfoyle proud. Named after Gilfoyle's server Anton from Silicon Valley.
 
 > **Key Philosophy**: Users **know** which tools are being used, **understand** what each tool does, **control** which integrations are active, and **experience** seamless workflows across systems.
 

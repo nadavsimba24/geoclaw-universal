@@ -2,10 +2,11 @@
    Default tokens get overridden at runtime by DESIGN.md (via applyTheme). */
 
 :root {
-  --primary:    #7A5FE6;   /* violet — brand */
+  --primary:    #C0392B;   /* blood red — AntónClaw brand */
+  --primary-hi: #E74C3C;   /* lighter red for hover */
   --secondary:  #8A8A94;
-  --tertiary:   #FF8C3C;
-  --violet:     #7A5FE6;
+  --tertiary:   #E67E22;   /* ember orange */
+  --violet:     #7A5FE6;   /* kept for legacy/design tokens */
   --teal:       #56C2C2;
   --neutral:    #F7F5F2;
   --surface:    #1A1B1E;

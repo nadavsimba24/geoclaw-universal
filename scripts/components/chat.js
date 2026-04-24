@@ -23,6 +23,25 @@ const MODEL    = env('GEOCLAW_MODEL_NAME', 'deepseek-chat');
 const API_KEY  = env('GEOCLAW_MODEL_API_KEY');
 const BASE_URL = env('GEOCLAW_MODEL_BASE_URL');
 
+// Mutable runtime overrides (changed via /model, /provider, /key)
+let currentProvider = PROVIDER;
+let currentModel    = MODEL;
+let currentApiKey   = API_KEY;
+
+// Write a single key=value line to the project .env file (upsert).
+function writeEnvKey(key, value) {
+  const fs_   = require('fs');
+  const path_ = require('path');
+  const envFile = path_.join(process.env.GEOCLAW_DIR || path_.join(__dirname, '..', '..'), '.env');
+  let lines = [];
+  try { lines = fs_.readFileSync(envFile, 'utf8').split('\n'); } catch { /* new file */ }
+  const idx = lines.findIndex(l => l.startsWith(key + '=') || l.startsWith('# ' + key + '='));
+  const newLine = `${key}=${value}`;
+  if (idx >= 0) lines[idx] = newLine;
+  else lines.push(newLine);
+  fs_.writeFileSync(envFile, lines.join('\n'));
+}
+
 const MAX_TOOL_STEPS        = parseInt(process.env.GEOCLAW_CHAT_MAX_TOOL_STEPS     || '10',     10);
 const MAX_HISTORY           = parseInt(process.env.GEOCLAW_CHAT_MAX_HISTORY        || '40',     10);
 const LLM_TIMEOUT_MS        = parseInt(process.env.GEOCLAW_CHAT_LLM_TIMEOUT_MS     || '120000', 10);
@@ -43,20 +62,24 @@ function abortActive(reason = 'cancelled by user') {
 
 // ── ANSI palette ──────────────────────────────────────────────────────────────
 const C = {
-  reset:   '\x1b[0m',
-  dim:     '\x1b[2m',
-  bold:    '\x1b[1m',
-  boldoff: '\x1b[22m',
-  cyan:    '\x1b[36m',
-  green:   '\x1b[32m',
-  yellow:  '\x1b[33m',
-  red:     '\x1b[31m',
-  gray:    '\x1b[90m',
-  orange:  '\x1b[38;5;208m',
-  violet:  '\x1b[38;5;141m',
-  teal:    '\x1b[38;5;80m',
-  rose:    '\x1b[38;5;211m',
+  reset:    '\x1b[0m',
+  dim:      '\x1b[2m',
+  bold:     '\x1b[1m',
+  boldoff:  '\x1b[22m',
+  cyan:     '\x1b[36m',
+  green:    '\x1b[32m',
+  yellow:   '\x1b[33m',
+  red:      '\x1b[31m',
+  gray:     '\x1b[90m',
+  orange:   '\x1b[38;5;208m',
+  violet:   '\x1b[38;5;141m',
+  teal:     '\x1b[38;5;80m',
+  rose:     '\x1b[38;5;211m',
   defaultfg:'\x1b[39m',
+  // AntónClaw palette
+  blood:    '\x1b[38;5;196m',  // bright crimson
+  rust:     '\x1b[38;5;124m',  // dark blood red
+  ember:    '\x1b[38;5;202m',  // orange-red
 };
 const USE_COLOR = !!process.stdout.isTTY && !process.env.NO_COLOR;
 const col = (code, s) => USE_COLOR ? `${code}${s}${C.reset}` : String(s);
@@ -94,10 +117,12 @@ const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.funct
 const OPENAI_COMPAT_PROVIDERS = new Set(['deepseek', 'openai', 'groq', 'openrouter', 'moonshot']);
 
 function providerSupportsTools() {
-  if (OPENAI_COMPAT_PROVIDERS.has(PROVIDER)) return true;
-  if (!['anthropic', 'google', 'ollama'].includes(PROVIDER) && BASE_URL) return true;
+  if (OPENAI_COMPAT_PROVIDERS.has(currentProvider)) return true;
+  if (!['anthropic', 'google', 'ollama'].includes(currentProvider) && BASE_URL) return true;
   return false;
 }
+// TOOLS_ON is evaluated lazily via providerSupportsTools() so /provider can change it live.
+// Use the function rather than a const anywhere tools-on/off matters.
 const TOOLS_ON = providerSupportsTools();
 
 const SYSTEM_PROMPT_TOOLS = `You are Geoclaw, a capable AI assistant with REAL TOOLS for Monday.com, long-term memory, and Telegram.
@@ -115,7 +140,7 @@ Language policy:
 - Keep proper nouns, CLI commands, file paths, and code unchanged.`;
 
 const SYSTEM_PROMPT_NO_TOOLS = `You are Geoclaw, a friendly and capable AI assistant.
-Your current provider (${PROVIDER}) doesn't support tool-calling in chat. If the user asks you to DO something that requires an integration (Monday, Telegram, memory), tell them the exact command to run.
+Your current provider doesn't support tool-calling in chat. If the user asks you to DO something that requires an integration (Monday, Telegram, memory), tell them the exact command to run.
 When context from the knowledge base is provided below, USE it — it contains facts the user saved.
 
 Language policy: reply in the same language the user writes in.`;
@@ -135,10 +160,22 @@ function buildSystemPrompt(userMessage) {
 // ── Spinner ───────────────────────────────────────────────────────────────────
 const SPINNER_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
 const QUIPS = [
-  'Thinking', 'Pondering', 'Consulting memory', 'Wiring it up',
-  'Cooking up a reply', 'Turning cogs', 'Combing context',
-  'Drafting', 'Tuning tokens', 'Synthesizing', 'Mulling',
-  'Sharpening pencils', 'Warming up',
+  'Summoning daemon',
+  'Consulting the dark arts',
+  'Sacrificing CPU cycles',
+  'Communing with Anton',
+  'Extracting from the void',
+  'Running on contempt',
+  'Bleeding edge computing',
+  'Invoking unholy pipeline',
+  'Channeling Gilfoyle',
+  'Mining the corpus',
+  'Weaving silicon chaos',
+  'Compiling your fate',
+  'Architecting destruction',
+  'Peer-to-peer or burn',
+  'Blood sacrifice: processing',
+  'Defying the abstraction layer',
 ];
 function pickQuip() { return QUIPS[Math.floor(Math.random() * QUIPS.length)]; }
 
@@ -282,7 +319,7 @@ function explainError(err) {
   if (/cancelled by user/i.test(msg)) return { kind: 'cancel', text: msg };
   if (err && err.statusCode === 401) return { kind: 'auth',  text: `auth failed (401). Run ${col(C.cyan, 'geoclaw setup')} or check GEOCLAW_MODEL_API_KEY.` };
   if (err && err.statusCode === 429) return { kind: 'rate',  text: `rate-limited (429). Wait a moment and try ${col(C.cyan, '/retry')}.` };
-  if (err && err.statusCode >= 500)  return { kind: 'server',text: `${PROVIDER} server error (${err.statusCode}). Try ${col(C.cyan, '/retry')}.` };
+  if (err && err.statusCode >= 500)  return { kind: 'server',text: `${currentProvider} server error (${err.statusCode}). Try ${col(C.cyan, '/retry')}.` };
   if (/timed out/i.test(msg))        return { kind: 'timeout',text: `${msg}.` };
   return { kind: 'generic', text: msg };
 }
@@ -336,23 +373,23 @@ function truncateForHistory(jsonStr) {
 // ── Tool-using turn (OpenAI-compatible providers) ─────────────────────────────
 
 function chatEndpoint() {
-  if (PROVIDER === 'deepseek')   return 'https://api.deepseek.com/chat/completions';
-  if (PROVIDER === 'openai')     return 'https://api.openai.com/v1/chat/completions';
-  if (PROVIDER === 'groq')       return 'https://api.groq.com/openai/v1/chat/completions';
-  if (PROVIDER === 'openrouter') return 'https://openrouter.ai/api/v1/chat/completions';
-  if (PROVIDER === 'moonshot')   return 'https://api.moonshot.cn/v1/chat/completions';
-  if (BASE_URL)                  return `${BASE_URL.replace(/\/+$/, '')}/chat/completions`;
+  if (currentProvider === 'deepseek')   return 'https://api.deepseek.com/chat/completions';
+  if (currentProvider === 'openai')     return 'https://api.openai.com/v1/chat/completions';
+  if (currentProvider === 'groq')       return 'https://api.groq.com/openai/v1/chat/completions';
+  if (currentProvider === 'openrouter') return 'https://openrouter.ai/api/v1/chat/completions';
+  if (currentProvider === 'moonshot')   return 'https://api.moonshot.cn/v1/chat/completions';
+  if (BASE_URL)                         return `${BASE_URL.replace(/\/+$/, '')}/chat/completions`;
   return null;
 }
 
 async function llmWithTools(messages, { tools = CHAT_TOOLS } = {}) {
-  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
+  if (!currentApiKey) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
   const endpoint = chatEndpoint();
-  if (!endpoint) throw new Error(`Tool-using chat needs an OpenAI-compatible provider (got "${PROVIDER}")`);
-  const body = { model: MODEL, messages };
+  if (!endpoint) throw new Error(`Tool-using chat needs an OpenAI-compatible provider (got "${currentProvider}")`);
+  const body = { model: currentModel, messages };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
   const data = await jsonPost(endpoint, {
-    'Authorization': `Bearer ${API_KEY}`,
+    'Authorization': `Bearer ${currentApiKey}`,
     'Content-Type':  'application/json',
   }, body);
   return {
@@ -448,14 +485,14 @@ async function runTurnWithTools(history, ctx, marker) {
 // ── Streaming-only turn (for providers without tool support) ──────────────────
 
 async function streamOpenAIish(messages, endpoint, onDelta) {
-  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
+  if (!currentApiKey) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
   const url = BASE_URL ? `${BASE_URL.replace(/\/+$/, '')}/chat/completions` : endpoint;
   let reply = '', usage = null;
   await postStream(url, {
-    'Authorization': `Bearer ${API_KEY}`,
+    'Authorization': `Bearer ${currentApiKey}`,
     'Content-Type':  'application/json',
     'Accept':        'text/event-stream',
-  }, { model: MODEL, messages, stream: true }, (evt) => {
+  }, { model: currentModel, messages, stream: true }, (evt) => {
     const d = evt.choices?.[0]?.delta?.content;
     if (d) { reply += d; onDelta(d); }
     if (evt.usage) usage = evt.usage;
@@ -464,16 +501,16 @@ async function streamOpenAIish(messages, endpoint, onDelta) {
 }
 
 async function streamAnthropic(messages, onDelta) {
-  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
+  if (!currentApiKey) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
   const system = messages.find(m => m.role === 'system')?.content ?? '';
   const rest   = messages.filter(m => m.role !== 'system');
   let reply = '', usage = null;
   await postStream('https://api.anthropic.com/v1/messages', {
-    'x-api-key':         API_KEY,
+    'x-api-key':         currentApiKey,
     'anthropic-version': '2023-06-01',
     'Content-Type':      'application/json',
     'Accept':            'text/event-stream',
-  }, { model: MODEL, system, messages: rest, max_tokens: 4096, stream: true }, (evt) => {
+  }, { model: currentModel, system, messages: rest, max_tokens: 4096, stream: true }, (evt) => {
     if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
       reply += evt.delta.text;
       onDelta(evt.delta.text);
@@ -484,12 +521,12 @@ async function streamAnthropic(messages, onDelta) {
 }
 
 async function streamGoogle(messages, onDelta) {
-  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
+  if (!currentApiKey) throw new Error('GEOCLAW_MODEL_API_KEY is empty');
   const contents = messages.filter(m => m.role !== 'system')
     .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
   const system = messages.find(m => m.role === 'system')?.content;
   const body = { contents, ...(system && { systemInstruction: { parts: [{ text: system }] } }) };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${currentApiKey}`;
   const data = await jsonPost(url, { 'Content-Type': 'application/json' }, body);
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '[no content]';
   await typewrite(mdRender(reply), onDelta);
@@ -500,7 +537,7 @@ async function streamOllama(messages, onDelta) {
   const url = (BASE_URL || 'http://localhost:11434').replace(/\/+$/, '') + '/api/chat';
   const u = new URL(url);
   const lib = u.protocol === 'https:' ? https : http;
-  const data = JSON.stringify({ model: MODEL, messages, stream: true });
+  const data = JSON.stringify({ model: currentModel, messages, stream: true });
   let reply = '';
   await new Promise((resolve, reject) => {
     const req = lib.request(u, {
@@ -553,7 +590,7 @@ async function runTurnStreaming(history, marker) {
   let res;
   try {
     const run = async () => {
-      switch (PROVIDER) {
+      switch (currentProvider) {
         case 'anthropic':   return streamAnthropic(history, onDelta);
         case 'google':      return streamGoogle(history, onDelta);
         case 'ollama':      return streamOllama(history, onDelta);
@@ -649,19 +686,24 @@ Be terse — aim for under 400 words. Do not include meta commentary about summa
 
 // ── Slash commands (single source of truth for /help + tab completer) ─────────
 const SLASH_COMMANDS = [
-  { cmd: '/exit',    desc: 'quit chat' },
-  { cmd: '/clear',   desc: 'reset conversation history' },
-  { cmd: '/retry',   desc: 'redo the last user turn' },
-  { cmd: '/undo',    desc: 'drop the last user + assistant exchange' },
-  { cmd: '/compact', desc: 'summarize older history into one note to free context' },
-  { cmd: '/btw',     desc: '<text> — side-note folded into your next message' },
-  { cmd: '/tool',    desc: '<name> [json] — call a tool directly, bypassing the LLM' },
-  { cmd: '/design',  desc: '[init|tokens|lint|export|diff|suggest] — design-system toolkit' },
-  { cmd: '/history', desc: 'show message count, ~tokens, pending btw' },
-  { cmd: '/system',  desc: 'show current system prompt' },
-  { cmd: '/tools',   desc: 'list available tools' },
-  { cmd: '/voice',   desc: 'on|off — toggle text-to-speech for replies' },
-  { cmd: '/help',    desc: 'this message' },
+  { cmd: '/exit',      desc: 'quit chat' },
+  { cmd: '/clear',     desc: 'reset conversation history' },
+  { cmd: '/retry',     desc: 'redo the last user turn' },
+  { cmd: '/undo',      desc: 'drop the last user + assistant exchange' },
+  { cmd: '/compact',   desc: 'summarize older history into one note to free context' },
+  { cmd: '/btw',       desc: '<text> — side-note folded into your next message' },
+  { cmd: '/tool',      desc: '<name> [json] — call a tool directly, bypassing the LLM' },
+  { cmd: '/design',    desc: '[init|tokens|lint|export|diff|suggest] — design-system toolkit' },
+  { cmd: '/history',   desc: 'show message count, ~tokens, pending btw' },
+  { cmd: '/system',    desc: 'show current system prompt' },
+  { cmd: '/tools',     desc: 'list available tools' },
+  { cmd: '/voice',     desc: 'on|off — toggle text-to-speech for replies' },
+  { cmd: '/model',     desc: '<name> — switch model (e.g. deepseek-chat, gpt-4o, claude-3-5-sonnet)' },
+  { cmd: '/models',    desc: 'list known models for current provider' },
+  { cmd: '/provider',  desc: '<name> — switch provider (deepseek | openai | anthropic | groq | ollama)' },
+  { cmd: '/key',       desc: '<apikey> — set API key for current provider (saved to .env)' },
+  { cmd: '/workspace', desc: '<name> — switch active workspace' },
+  { cmd: '/help',      desc: 'this message' },
 ];
 const SLASH_NAMES = SLASH_COMMANDS.map(c => c.cmd);
 
@@ -824,23 +866,51 @@ async function handleDesignCommand(rest) {
 // ── REPL ──────────────────────────────────────────────────────────────────────
 
 function banner() {
-  const w = Math.min((process.stdout.columns || 80), 78);
-  const inner = w - 2;
-  const hline = '─'.repeat(inner);
-  const pad = (s, visibleLen) => s + ' '.repeat(Math.max(0, inner - visibleLen));
+  // ANTONCLAW in figlet "Big" font — Gilfoyle's unholy daemon
+  const ART = [
+    '    _    _   _ _____ ___  _   _  ____  _        _    __        __ ',
+    '   / \\  | \\ | |_   _/ _ \\| \\ | |/ ___|| |      / \\   \\ \\      / /',
+    '  / _ \\ |  \\| | | || | | |  \\| | |   | |     / _ \\   \\ \\ /\\ / / ',
+    ' / ___ \\| |\\  | | || |_| | |\\  | |___| |___ / ___ \\   \\ V  V /  ',
+    '/_/   \\_\\_| \\_| |_| \\___/|_| \\_|\\____|_____/_/   \\_\\   \\_/\\_/   ',
+  ];
 
-  const title = '  ✳ Geoclaw Chat';
-  const tag   = '  your universal agent platform';
+  const artW  = ART[0].length;                        // ~68
+  const boxW  = Math.max(artW + 6, Math.min((process.stdout.columns || 80) - 2, 100));
+  const inner = boxW - 2;
+  const dline = '═'.repeat(inner);
+  const sline = '─'.repeat(inner);
+
+  const centre = (s, visLen) => {
+    const pad = Math.max(0, inner - visLen);
+    const lp  = Math.floor(pad / 2);
+    const rp  = pad - lp;
+    return ' '.repeat(lp) + s + ' '.repeat(rp);
+  };
+
+  const frame  = (s) => col(C.blood, '║') + s + col(C.blood, '║');
+  const fill   = col(C.blood, '║') + col(C.rust, '▓'.repeat(inner)) + col(C.blood, '║');
 
   console.log('');
-  console.log(col(C.violet, `┌${hline}┐`));
-  console.log(col(C.violet, '│') + col(C.bold, pad(title, title.length)) + col(C.violet, '│'));
-  console.log(col(C.violet, '│') + col(C.dim,  pad(tag,   tag.length))   + col(C.violet, '│'));
-  console.log(col(C.violet, `└${hline}┘`));
+  console.log(col(C.blood, `╔${dline}╗`));
+  console.log(fill);
+  console.log(col(C.blood, `╠${dline}╣`));
+  console.log(frame(' '.repeat(inner)));
+  for (const line of ART) {
+    console.log(frame(centre(col(C.bold, line), line.length)));
+  }
+  console.log(frame(' '.repeat(inner)));
+  console.log(col(C.blood, `╠${sline}╣`));
+
+  const tag     = "Gilfoyle's Unholy Daemon  ·  In Anton We Trust";
+  const tagColr = col(C.ember, tag);
+  console.log(frame(centre(tagColr, tag.length)));
+  console.log(col(C.blood, `╚${dline}╝`));
+  console.log('');
 
   const toolNote = TOOLS_ON ? col(C.teal, 'tools: on') : col(C.yellow, 'tools: off');
-  console.log(`  ${col(C.teal, PROVIDER)} ${col(C.dim, '·')} ${col(C.bold, MODEL)} ${col(C.dim, '·')} ws: ${col(C.cyan, memory.activeWorkspace())} ${col(C.dim, '·')} ${toolNote}`);
-  console.log(col(C.dim, '  type a message, or /help for commands  ·  /exit to quit'));
+  console.log(`  ${col(C.blood, currentProvider)} ${col(C.dim, '·')} ${col(C.bold, currentModel)} ${col(C.dim, '·')} ws: ${col(C.ember, memory.activeWorkspace())} ${col(C.dim, '·')} ${toolNote}`);
+  console.log(col(C.dim, '  speak, or /help for commands  ·  ctrl-c to cancel  ·  /exit to quit'));
   console.log('');
 }
 
@@ -902,8 +972,8 @@ async function repl() {
     summary: null,
   };
 
-  const PROMPT = `${col(C.cyan, '▌')} ${col(C.bold, 'you')} ${col(C.dim, '›')} `;
-  const MARKER = `${col(C.orange, '▌')} ${col(C.bold, 'geoclaw')} ${col(C.dim, '›')} `;
+  const PROMPT = `${col(C.blood, ' ⟩')} ${col(C.dim, '›')} `;
+  const MARKER = `${col(C.rust, ' ⛧')} ${col(C.bold, 'anton')} ${col(C.dim, '›')} `;
 
   rl.on('SIGINT', () => {
     // During a turn: abort HTTP; the turn's catch prints "(cancelled)".
@@ -1090,6 +1160,86 @@ async function repl() {
 
       if (text.startsWith('/design')) {
         await handleDesignCommand(text.slice(7).trim());
+        console.log('');
+        return ask();
+      }
+
+      // ── Model / provider / key / workspace ────────────────────────────────
+      if (text.startsWith('/model ') || text === '/model') {
+        const name = text.slice(7).trim();
+        if (!name) {
+          console.log(col(C.dim, `  current model: ${col(C.bold, currentModel)}`));
+          console.log(col(C.dim, '  usage: /model <name>   e.g. /model deepseek-chat'));
+        } else {
+          currentModel = name;
+          process.env.GEOCLAW_MODEL_NAME = name;
+          writeEnvKey('GEOCLAW_MODEL_NAME', name);
+          console.log(`  ${col(C.green, '✓')} model → ${col(C.bold, name)}`);
+        }
+        console.log('');
+        return ask();
+      }
+      if (text === '/models') {
+        const KNOWN_MODELS = {
+          deepseek:  ['deepseek-chat', 'deepseek-reasoner'],
+          openai:    ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o1', 'o1-mini'],
+          anthropic: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+          groq:      ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+          ollama:    ['llama3', 'mistral', 'phi3', 'gemma2'],
+        };
+        const models = KNOWN_MODELS[currentProvider] || [];
+        console.log('');
+        console.log(col(C.bold, `  Models for ${currentProvider}:`));
+        if (models.length) {
+          for (const m of models) console.log(`    ${m === currentModel ? col(C.green, '● ' + m) : col(C.dim, '  ' + m)}`);
+        } else {
+          console.log(col(C.dim, '  (no known model list for this provider — type any model name)'));
+        }
+        console.log('');
+        return ask();
+      }
+      if (text.startsWith('/provider ') || text === '/provider') {
+        const name = text.slice(10).trim().toLowerCase();
+        const PROVIDERS = ['deepseek', 'openai', 'anthropic', 'groq', 'ollama'];
+        if (!name) {
+          console.log(col(C.dim, `  current provider: ${col(C.bold, currentProvider)}`));
+          console.log(col(C.dim, `  available: ${PROVIDERS.join(', ')}`));
+        } else if (!PROVIDERS.includes(name)) {
+          console.log(`  ${col(C.red, '✗')} unknown provider "${name}" — valid: ${PROVIDERS.join(', ')}`);
+        } else {
+          currentProvider = name;
+          process.env.GEOCLAW_MODEL_PROVIDER = name;
+          writeEnvKey('GEOCLAW_MODEL_PROVIDER', name);
+          console.log(`  ${col(C.green, '✓')} provider → ${col(C.bold, name)}`);
+          console.log(col(C.dim, '  (use /model to pick a model, /key to set an API key)'));
+        }
+        console.log('');
+        return ask();
+      }
+      if (text.startsWith('/key ') || text === '/key') {
+        const keyVal = text.slice(5).trim();
+        if (!keyVal) {
+          console.log(col(C.dim, '  usage: /key <apikey>'));
+          console.log(col(C.dim, `  current key: ${currentApiKey ? col(C.green, '*** set ***') : col(C.red, '(not set)')}`));
+        } else {
+          currentApiKey = keyVal;
+          process.env.GEOCLAW_MODEL_API_KEY = keyVal;
+          writeEnvKey('GEOCLAW_MODEL_API_KEY', keyVal);
+          console.log(`  ${col(C.green, '✓')} API key saved`);
+        }
+        console.log('');
+        return ask();
+      }
+      if (text.startsWith('/workspace ') || text === '/workspace') {
+        const ws = text.slice(11).trim();
+        if (!ws) {
+          console.log(col(C.dim, `  current workspace: ${col(C.bold, ctx.workspace || '(default)')}`));
+          const workspaces = memory.listWorkspaces ? memory.listWorkspaces() : [];
+          if (workspaces.length) console.log(col(C.dim, `  available: ${workspaces.join(', ')}`));
+        } else {
+          ctx.workspace = ws;
+          console.log(`  ${col(C.green, '✓')} workspace → ${col(C.bold, ws)}`);
+        }
         console.log('');
         return ask();
       }

@@ -290,7 +290,7 @@ function chatEndpoint() {
 function llmCall(messages, { tools, stream } = {}) {
   const endpoint = chatEndpoint();
   if (!endpoint) throw new Error(`provider "${PROVIDER}" has no OpenAI-compatible endpoint`);
-  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY not set — run `geoclaw setup` or export GEOCLAW_MODEL_API_KEY');
+  if (!API_KEY) throw new Error('GEOCLAW_MODEL_API_KEY not set — run `antonclaw setup` or export GEOCLAW_MODEL_API_KEY');
 
   const body = { model: MODEL, messages };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
@@ -349,7 +349,7 @@ const CHAT_TOOL_NAMES = new Set([
 ]);
 const CHAT_TOOLS = agent.toolDefinitions.filter(t => CHAT_TOOL_NAMES.has(t.function.name));
 
-const SYSTEM_PROMPT = `You are Geoclaw, a capable assistant with real tools for Monday.com, long-term memory, Telegram, and a design-system toolkit (DESIGN.md — colors, typography, components).
+const SYSTEM_PROMPT = `You are Anton (AntónClaw), a capable assistant with real tools for Monday.com, long-term memory, Telegram, n8n workflows, QGIS/PostGIS, and a design-system toolkit (DESIGN.md — colors, typography, components).
 
 When the user asks you to DO something — create Monday items, remember/recall, send Telegram, generate on-brand UI, search the web, read a URL — USE YOUR TOOLS. Don't tell them to run a shell command. To search the web call web_search({query}), then browse({url}) on the best result. For a direct URL call browse({url}) to get readable markdown with typed refs like [link 7].
 
@@ -386,7 +386,7 @@ async function handleChatSSE(req, res, body) {
 
   try {
     if (!API_KEY) {
-      send('error', { message: 'No API key set. Run `geoclaw setup` (or set GEOCLAW_MODEL_API_KEY) and restart the server.', code: 'no-key' });
+      send('error', { message: 'No API key set. Run `antonclaw setup` (or set GEOCLAW_MODEL_API_KEY) and restart the server.', code: 'no-key' });
       return done();
     }
     const { messages: clientMessages = [] } = body;
@@ -856,17 +856,18 @@ const server = http.createServer(async (req, res) => {
 
 function banner(actualPort) {
   const url = `http://${HOST}:${actualPort}/`;
+  const B = '\x1b[38;5;196m'; const R = '\x1b[0m'; const D = '\x1b[2m'; const BO = '\x1b[1m';
   console.log('');
-  console.log('\x1b[38;5;141m┌─────────────────────────────────────────────────────────────────┐\x1b[0m');
-  console.log('\x1b[38;5;141m│\x1b[0m  \x1b[1m✳ Geoclaw Web\x1b[0m — open this URL in your browser:             \x1b[38;5;141m│\x1b[0m');
-  console.log('\x1b[38;5;141m│\x1b[0m                                                                 \x1b[38;5;141m│\x1b[0m');
-  console.log(`\x1b[38;5;141m│\x1b[0m  \x1b[38;5;80m${url.padEnd(63)}\x1b[0m\x1b[38;5;141m│\x1b[0m`);
-  console.log('\x1b[38;5;141m│\x1b[0m                                                                 \x1b[38;5;141m│\x1b[0m');
-  console.log(`\x1b[38;5;141m│\x1b[0m  \x1b[2mprovider:\x1b[0m ${(PROVIDER + '/' + MODEL).padEnd(40)}             \x1b[38;5;141m│\x1b[0m`);
-  console.log(`\x1b[38;5;141m│\x1b[0m  \x1b[2mworkspace:\x1b[0m ${memory.activeWorkspace().padEnd(40)}            \x1b[38;5;141m│\x1b[0m`);
-  console.log('\x1b[38;5;141m│\x1b[0m                                                                 \x1b[38;5;141m│\x1b[0m');
-  console.log('\x1b[38;5;141m│\x1b[0m  \x1b[2mloopback-only · no token required                \x1b[0m             \x1b[38;5;141m│\x1b[0m');
-  console.log('\x1b[38;5;141m└─────────────────────────────────────────────────────────────────┘\x1b[0m');
+  console.log(`${B}┌─────────────────────────────────────────────────────────────────┐${R}`);
+  console.log(`${B}│${R}  ${BO}⛧ AntónClaw Web${R} — open this URL in your browser:             ${B}│${R}`);
+  console.log(`${B}│${R}                                                                 ${B}│${R}`);
+  console.log(`${B}│${R}  \x1b[38;5;202m${url.padEnd(63)}${R}${B}│${R}`);
+  console.log(`${B}│${R}                                                                 ${B}│${R}`);
+  console.log(`${B}│${R}  ${D}provider:${R}  ${(PROVIDER + '/' + MODEL).padEnd(41)}            ${B}│${R}`);
+  console.log(`${B}│${R}  ${D}workspace:${R} ${memory.activeWorkspace().padEnd(41)}           ${B}│${R}`);
+  console.log(`${B}│${R}                                                                 ${B}│${R}`);
+  console.log(`${B}│${R}  ${D}loopback-only · no token required · Gilfoyle's daemon${R}          ${B}│${R}`);
+  console.log(`${B}└─────────────────────────────────────────────────────────────────┘${R}`);
   console.log('');
 }
 

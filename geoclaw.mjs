@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Geoclaw v3.0 - Universal Agent Platform CLI
-// Entry point for global installation
+// AntónClaw — Gilfoyle's Unholy Daemon
+// Universal Agent Platform CLI (geoclaw / antonclaw)
 
 import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -53,65 +53,51 @@ function detectShell() {
 // ── Banner / Help ───────────────────────────────────────────────────────────
 
 function printBanner() {
+  const B = '\x1b[38;5;196m'; const R = '\x1b[0m'; const BO = '\x1b[1m'; const D = '\x1b[2m';
   console.log(`
-🎭  Geoclaw v3.0 - Universal Agent Platform
-────────────────────────────────────────────
-Transparent automation with educational UX
+${B}  ⛧  A N T Ó N C L A W  ⛧${R}
+${B}  ─────────────────────────${R}
+  ${BO}Gilfoyle's Unholy Daemon${R}
+  ${D}OpenClaw fork · DeepSeek · Groq · Kimi · Monday.com · n8n · QGIS${R}
 `);
 }
 
 function printHelp() {
   console.log(`
-Usage: geoclaw <command> [options]
+Usage: antonclaw <command> [options]  (alias: geoclaw)
 
 Commands:
-  chat            Talk to your configured LLM (with knowledge base context)
+  chat            Terminal chat — Gilfoyle-themed REPL with full tool access
   agent <goal>    Autonomous agent — plans and executes a goal using tools
   remember <text> Save a fact to the knowledge base
   recall <query>  Search the knowledge base
-  ingest <file>   Ingest a document (.txt/.md/.pdf/.docx/.xlsx/.csv) into the knowledge base
-  upload          Start the local web UI for managing the knowledge base
-  serve           Start the Geoclaw web dashboard (chat, agents, autopilots, files)
+  ingest <file>   Ingest a document (.txt/.md/.pdf/.docx/.xlsx/.csv)
+  serve           Start the AntónClaw web dashboard (chat, agents, skills, files)
   daemon          Background daemon (start|stop|restart|status|logs|install)
   bot             Start the Telegram bot (needs GEOCLAW_TELEGRAM_BOT_TOKEN)
   say <text>      Speak text out loud (text-to-speech)
-  memory          Manage the knowledge base (list, forget, stats, export, clear)
-  skills          Manage SKILL.md skills (list, add, bundles, create — from skills-il)
+  memory          Session memory (list|clear|summary)
+  skills          Manage SKILL.md skills (list, add, install-registry, search)
   browse <url>    Fetch a web page and extract readable markdown + typed refs
   search <query>  Search the web (DuckDuckGo free; Brave/Serper with API key)
   firecrawl       Web scraping via Firecrawl (scrape, crawl, map)
   workspace       Manage workspaces (list, create, use, current, delete)
-  start           Start Geoclaw agent platform
   setup           Interactive setup wizard
   doctor          Check system requirements & diagnose issues
   update          Update to the latest version
-  learn <topic>   Learn about a component
-  status          Show platform status
-  workflow        Magic workflow commands
-  mcp             MCP integration commands
   monday          Monday.com commands (boards, create, update, comment)
+  n8n             n8n workflow commands
   help            Show this help
 
-Examples:
-  geoclaw start
-  geoclaw setup
-  geoclaw update
-  geoclaw learn mcporter
-  geoclaw learn n8n
-  geoclaw status
-  geoclaw workflow create
-  geoclaw mcp list
+Provider freedom (set in .env or via /provider /model /key in chat):
+  DeepSeek · Groq · Kimi/Moonshot · OpenAI · Anthropic · Ollama · any OpenAI-compat API
 
-Component topics:
-  mcporter        MCP server discovery & calling
-  n8n             Workflow automation
-  qgis            Geospatial analysis
-  web-scraping    Data collection
-  vibe-kanban     Task management
-  monday          Project management
-  salesforce      CRM automation
-  memory          Central Intelligence
-  skills          GitHub CLI Skills
+Examples:
+  antonclaw chat
+  antonclaw serve
+  antonclaw agent "create Monday.com items from this CSV"
+  antonclaw monday list-boards
+  antonclaw skills search monday
 
 Learn more: https://github.com/nadavsimba24/geoclaw-universal
 `);

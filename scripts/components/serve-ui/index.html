@@ -4,17 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
-  <title>Geoclaw</title>
+  <title>AntónClaw</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="app.css" />
 </head>
 <body>
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">✳</div>
+      <div class="brand-mark">⛧</div>
       <div class="brand-text">
-        <div class="brand-name">Geoclaw</div>
-        <div class="brand-sub" id="brand-sub">universal agent</div>
+        <div class="brand-name">AntónClaw</div>
+        <div class="brand-sub" id="brand-sub">Gilfoyle's daemon</div>
       </div>
     </div>
 
@@ -76,7 +76,7 @@
     <!-- ── CAPABILITIES ─────────────────────────────────────────────────── -->
     <section class="view" data-view="capabilities" hidden>
       <header class="view-header">
-        <h1 data-i18n-text="cap.title">What Geoclaw can do</h1>
+        <h1 data-i18n-text="cap.title">What AntónClaw can do</h1>
       </header>
       <p class="hint" data-i18n-text="cap.subtitle">A universal agent for Israeli organizations — chat, autonomous agents, web browsing, skills, and more, all local and private.</p>
       <div class="cap-grid">
@@ -98,22 +98,22 @@
         <button class="cap-card" data-cap-view="skills">
           <div class="cap-icon">🧩</div>
           <h3 data-i18n-text="cap.skills.title">Israeli skills</h3>
-          <p data-i18n-text="cap.skills.desc">Install tax-season, legal, accounting, and government bundles from skills-il — Geoclaw sees them automatically.</p>
+          <p data-i18n-text="cap.skills.desc">Install tax-season, legal, accounting, and government bundles from skills-il — AntónClaw sees them automatically.</p>
         </button>
         <button class="cap-card" data-cap-view="autopilots">
           <div class="cap-icon">🎯</div>
           <h3 data-i18n-text="cap.autopilots.title">Autopilots</h3>
-          <p data-i18n-text="cap.autopilots.desc">Schedule agents to run on cron (@hourly, @daily) — Geoclaw keeps working while you sleep.</p>
+          <p data-i18n-text="cap.autopilots.desc">Schedule agents to run on cron (@hourly, @daily) — AntónClaw keeps working while you sleep.</p>
         </button>
         <button class="cap-card" data-cap-view="files">
           <div class="cap-icon">📁</div>
           <h3 data-i18n-text="cap.files.title">Document ingest</h3>
-          <p data-i18n-text="cap.files.desc">Upload PDFs, Word, Excel, Markdown — Geoclaw indexes them into your knowledge base.</p>
+          <p data-i18n-text="cap.files.desc">Upload PDFs, Word, Excel, Markdown — AntónClaw indexes them into your knowledge base.</p>
         </button>
         <button class="cap-card" data-cap-view="design">
           <div class="cap-icon">🎨</div>
           <h3 data-i18n-text="cap.design.title">Design system</h3>
-          <p data-i18n-text="cap.design.desc">Scaffold a DESIGN.md — Geoclaw themes the UI and generates on-brand components.</p>
+          <p data-i18n-text="cap.design.desc">Scaffold a DESIGN.md — AntónClaw themes the UI and generates on-brand components.</p>
         </button>
         <button class="cap-card" data-cap-view="settings">
           <div class="cap-icon">🕷️</div>
@@ -148,7 +148,7 @@
       <header class="view-header">
         <h1 data-i18n-text="browser.title">Browser</h1>
       </header>
-      <p class="hint" data-i18n-text="browser.hint">Search the web or fetch a URL. Geoclaw extracts readable markdown with typed refs ([link 7], [button 9]) the agent can quote or describe.</p>
+      <p class="hint" data-i18n-text="browser.hint">Search the web or fetch a URL. AntónClaw extracts readable markdown with typed refs ([link 7], [button 9]) the agent can quote or describe.</p>
       <form id="browser-search-form" class="browser-bar">
         <input id="browser-search-input" type="text" placeholder="Search…" autocomplete="off" />
         <button type="submit" class="ghost" data-i18n-text="browser.search">Search</button>
@@ -191,7 +191,7 @@
       <div class="chat-composer">
         <form id="chat-composer">
           <div class="slash-menu" id="slash-menu" hidden></div>
-          <textarea id="chat-input" placeholder="Message Geoclaw… (type / for commands)" rows="1"></textarea>
+          <textarea id="chat-input" placeholder="Speak to Anton… (type / for commands)" rows="1"></textarea>
           <button type="submit" id="chat-send" class="chat-send" title="Send (Enter)" aria-label="Send">↑</button>
         </form>
       </div>
@@ -278,7 +278,7 @@
           <button id="skills-create" class="primary">+ Create</button>
         </div>
       </header>
-      <p class="hint">SKILL.md-format skills give Geoclaw domain expertise. Install from the registry below or create your own — Geoclaw sees them automatically in chat and agent runs.</p>
+      <p class="hint">SKILL.md-format skills give AntónClaw domain expertise. Install from the registry below or create your own — AntónClaw sees them automatically in chat and agent runs.</p>
 
       <!-- Installed skills -->
       <div class="list" id="skills-list">
@@ -318,7 +318,7 @@
           <button id="design-init" class="primary">+ Create DESIGN.md</button>
         </div>
       </header>
-      <p class="hint">A <code>DESIGN.md</code> in the current directory gives agents a consistent palette, typography, and components. The Geoclaw UI also reads it to theme itself.</p>
+      <p class="hint">A <code>DESIGN.md</code> in the current directory gives agents a consistent palette, typography, and components. The AntónClaw UI also reads it to theme itself.</p>
       <div class="panel" id="design-panel">
         <div class="empty">No DESIGN.md found. Click "+ Create DESIGN.md" to scaffold one.</div>
       </div>
@@ -356,7 +356,7 @@
           <button id="memory-clear" class="danger">Clear All</button>
         </div>
       </header>
-      <p class="hint">Geoclaw remembers what agents did in recent sessions and injects that context automatically into future runs — so agents know your recent work without you repeating yourself.</p>
+      <p class="hint">AntónClaw remembers what agents did in recent sessions and injects that context automatically into future runs — so agents know your recent work without you repeating yourself.</p>
       <div class="list" id="memory-list">
         <div class="empty">No session history yet. Session memory builds up as you use the agent.</div>
       </div>

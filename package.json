@@ -1,8 +1,9 @@
 {
-  "name": "geoclaw-universal",
-  "version": "3.0.0",
-  "description": "Geoclaw v3.0 - Universal Agent Platform with complete automation ecosystem integration",
+  "name": "antonclaw",
+  "version": "1.0.0",
+  "description": "AntónClaw — Gilfoyle's unholy daemon. OpenClaw fork with Monday.com, n8n, QGIS and full provider freedom (DeepSeek, Groq, Kimi, Anthropic).",
   "bin": {
+    "antonclaw": "geoclaw.mjs",
     "geoclaw": "geoclaw.mjs"
   },
   "scripts": {
@@ -11,6 +12,7 @@
     "test": "bash test-installation.sh"
   },
   "keywords": [
+    "antonclaw",
     "geoclaw",
     "openclaw",
     "ai-agent",
@@ -20,10 +22,11 @@
     "n8n",
     "qgis",
     "postgis",
-    "web-scraping",
-    "orchestration"
+    "monday",
+    "deepseek",
+    "groq"
   ],
-  "author": "Geoclaw Team",
+  "author": "AntónClaw",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

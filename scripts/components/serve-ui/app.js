@@ -1,4 +1,4 @@
-// Geoclaw Web UI — vanilla JS.
+// AntónClaw Web UI — vanilla JS.
 // Reads ?k=<token>, keeps it for all API calls. Switches view panes by data-view.
 // Themes itself from /api/design (DESIGN.md tokens) when present.
 
@@ -25,7 +25,7 @@ const el = (tag, props = {}, ...children) => {
 
 async function api(method, path, body) {
   const url = path.includes('?') ? `${path}&k=${TOKEN}` : `${path}?k=${TOKEN}`;
-  const opts = { method, headers: { 'X-Geoclaw-Token': TOKEN } };
+  const opts = { method, headers: { 'X-AntónClaw-Token': TOKEN } };
   if (body !== undefined) {
     if (body instanceof ArrayBuffer || body instanceof Blob) {
       opts.body = body;
@@ -48,7 +48,7 @@ function apiEventSource(path, body) {
   const ctrl = new AbortController();
   const opts = {
     method: body ? 'POST' : 'GET',
-    headers: { 'X-Geoclaw-Token': TOKEN, 'Accept': 'text/event-stream' },
+    headers: { 'X-AntónClaw-Token': TOKEN, 'Accept': 'text/event-stream' },
     signal: ctrl.signal,
   };
   if (body) { opts.body = JSON.stringify(body); opts.headers['Content-Type'] = 'application/json'; }
@@ -185,7 +185,7 @@ function renderKeyBanner() {
   const banner = el('div', { id: 'key-banner', class: 'banner' },
     el('span', {}, '⚠'),
     el('span', { html:
-      `No LLM API key set — chat won't work until you set <code>GEOCLAW_MODEL_API_KEY</code> in your <code>.env</code> and restart <code>geoclaw serve</code>.`
+      `No LLM API key set — chat won't work until you set <code>GEOCLAW_MODEL_API_KEY</code> in your <code>.env</code> and restart <code>antonclaw serve</code>.`
     })
   );
   const log = q('#chat-log');
@@ -550,7 +550,7 @@ q('#chat-composer').addEventListener('submit', async (e) => {
 
   // Guard: no API key → explain instead of silent failure.
   if (ME && !ME.hasKey) {
-    toast('No API key set. Use /key <your-key> or run geoclaw setup.', 'error', 8000);
+    toast('No API key set. Use /key <your-key> or run antonclaw setup.', 'error', 8000);
     return;
   }
 
@@ -844,7 +844,7 @@ async function uploadFile(file) {
   const buf = await file.arrayBuffer();
   try {
     await fetch(`/api/files/upload?name=${encodeURIComponent(file.name)}&k=${TOKEN}`, {
-      method: 'POST', body: buf, headers: { 'X-Geoclaw-Token': TOKEN },
+      method: 'POST', body: buf, headers: { 'X-AntónClaw-Token': TOKEN },
     }).then(async r => { if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`); });
     toast(`ingested ${file.name}`, 'success');
     loadFiles();
@@ -1414,7 +1414,7 @@ const I18N = {
     'nav.skills': 'Skills',
     'nav.design': 'Design',
     'nav.settings': 'Settings',
-    'cap.title': 'What Geoclaw can do',
+    'cap.title': 'What AntónClaw can do',
     'cap.subtitle': 'A universal agent for Israeli organizations — chat, autonomous agents, web browsing, skills, and more, all local and private.',
     'nav.approvals': 'Approvals',
     'approvals.title': 'Approvals',
@@ -1434,17 +1434,17 @@ const I18N = {
     'cap.browser.title': 'Web browser',
     'cap.browser.desc': 'Fetch any URL and extract readable markdown with typed refs (link, button, input).',
     'cap.skills.title': 'Israeli skills',
-    'cap.skills.desc': 'Install tax-season, legal, accounting, and government bundles from skills-il — Geoclaw sees them automatically.',
+    'cap.skills.desc': 'Install tax-season, legal, accounting, and government bundles from skills-il — AntónClaw sees them automatically.',
     'cap.autopilots.title': 'Autopilots',
-    'cap.autopilots.desc': 'Schedule agents to run on cron (@hourly, @daily) — Geoclaw keeps working while you sleep.',
+    'cap.autopilots.desc': 'Schedule agents to run on cron (@hourly, @daily) — AntónClaw keeps working while you sleep.',
     'cap.files.title': 'Document ingest',
-    'cap.files.desc': 'Upload PDFs, Word, Excel, Markdown — Geoclaw indexes them into your knowledge base.',
+    'cap.files.desc': 'Upload PDFs, Word, Excel, Markdown — AntónClaw indexes them into your knowledge base.',
     'cap.design.title': 'Design system',
-    'cap.design.desc': 'Scaffold a DESIGN.md — Geoclaw themes the UI and generates on-brand components.',
+    'cap.design.desc': 'Scaffold a DESIGN.md — AntónClaw themes the UI and generates on-brand components.',
     'cap.inbox.title': 'Activity inbox',
     'cap.inbox.desc': 'Every agent run, skill install, and file ingest lands here — a human-readable audit log.',
     'browser.title': 'Browser',
-    'browser.hint': 'Fetch any URL. Geoclaw extracts the readable content as markdown with typed refs ([link 7], [button 9], [input text 12]) the agent can quote or describe.',
+    'browser.hint': 'Fetch any URL. AntónClaw extracts the readable content as markdown with typed refs ([link 7], [button 9], [input text 12]) the agent can quote or describe.',
     'browser.go': 'Fetch',
     'browser.empty': 'Enter a URL to fetch and extract readable markdown.',
     'browser.refs': 'Refs',
@@ -1468,7 +1468,7 @@ const I18N = {
     'nav.skills': 'מיומנויות',
     'nav.design': 'עיצוב',
     'nav.settings': 'הגדרות',
-    'cap.title': 'מה Geoclaw יודע לעשות',
+    'cap.title': 'מה AntónClaw יודע לעשות',
     'cap.subtitle': 'סוכן אוניברסלי לארגונים ישראליים — צ׳אט, סוכנים אוטונומיים, גלישה, מיומנויות ועוד, הכל מקומי ופרטי.',
     'cap.chat.title': 'צ׳אט חכם',
     'cap.chat.desc': 'שוחחו עם ה-LLM עם זיכרון מבסיס-הידע וכלים אמיתיים (Monday, טלגרם, מערכת עיצוב).',
@@ -1477,17 +1477,17 @@ const I18N = {
     'cap.browser.title': 'דפדפן',
     'cap.browser.desc': 'הביאו כל URL וחלצו טקסט קריא כ-Markdown עם סימוני רכיבים (קישור, כפתור, שדה).',
     'cap.skills.title': 'מיומנויות ישראליות',
-    'cap.skills.desc': 'התקינו חבילות עונת מיסים, משפט, ראיית חשבון וממשלה מ-skills-il — Geoclaw רואה אותן אוטומטית.',
+    'cap.skills.desc': 'התקינו חבילות עונת מיסים, משפט, ראיית חשבון וממשלה מ-skills-il — AntónClaw רואה אותן אוטומטית.',
     'cap.autopilots.title': 'טייס אוטומטי',
-    'cap.autopilots.desc': 'תזמנו סוכנים ב-cron (@hourly, @daily) — Geoclaw ממשיך לעבוד בזמן שאתם ישנים.',
+    'cap.autopilots.desc': 'תזמנו סוכנים ב-cron (@hourly, @daily) — AntónClaw ממשיך לעבוד בזמן שאתם ישנים.',
     'cap.files.title': 'הזנת מסמכים',
-    'cap.files.desc': 'העלו PDF, וורד, אקסל, Markdown — Geoclaw מאנדקס אותם לבסיס-הידע שלכם.',
+    'cap.files.desc': 'העלו PDF, וורד, אקסל, Markdown — AntónClaw מאנדקס אותם לבסיס-הידע שלכם.',
     'cap.design.title': 'מערכת עיצוב',
-    'cap.design.desc': 'יצרו DESIGN.md — Geoclaw מעצב את הממשק ומייצר רכיבים לפי המותג.',
+    'cap.design.desc': 'יצרו DESIGN.md — AntónClaw מעצב את הממשק ומייצר רכיבים לפי המותג.',
     'cap.inbox.title': 'תיבת פעילות',
     'cap.inbox.desc': 'כל ריצת סוכן, התקנת מיומנות והזנת קובץ נרשמים כאן — יומן ביקורת קריא.',
     'browser.title': 'דפדפן',
-    'browser.hint': 'הביאו כל URL. Geoclaw מחלץ את התוכן הקריא כ-Markdown עם סימוני רכיבים ([link 7], [button 9], [input text 12]) שהסוכן יכול לצטט או לתאר.',
+    'browser.hint': 'הביאו כל URL. AntónClaw מחלץ את התוכן הקריא כ-Markdown עם סימוני רכיבים ([link 7], [button 9], [input text 12]) שהסוכן יכול לצטט או לתאר.',
     'browser.go': 'הבא',
     'browser.empty': 'הזינו URL כדי להביא ולחלץ Markdown קריא.',
     'browser.refs': 'רכיבים',
@@ -1503,7 +1503,7 @@ const I18N = {
 };
 
 function currentLang() {
-  return localStorage.getItem('geoclaw.lang') || 'en';
+  return localStorage.getItem('antonclaw.lang') || 'en';
 }
 
 function t(key) {
@@ -1521,7 +1521,7 @@ function applyI18n() {
 
 qa('.lang-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    localStorage.setItem('geoclaw.lang', btn.dataset.lang);
+    localStorage.setItem('antonclaw.lang', btn.dataset.lang);
     applyI18n();
   });
 });
