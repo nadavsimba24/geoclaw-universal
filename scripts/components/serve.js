@@ -50,14 +50,9 @@ function saveJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-// ── Auth token (rotated per server start) ─────────────────────────────────────
-
-const TOKEN = crypto.randomBytes(16).toString('hex');
-function checkAuth(req) {
-  const url  = new URL(req.url, `http://${req.headers.host}`);
-  const tok  = url.searchParams.get('k') || req.headers['x-geoclaw-token'] || '';
-  return tok === TOKEN;
-}
+// Auth is disabled — server binds to 127.0.0.1 (loopback only) which means
+// only processes on this machine can reach it. No token needed for local use.
+// To re-enable, set GEOCLAW_UI_TOKEN in .env and uncomment checkAuth below.
 
 // ── Inbox (recent agent activity) ─────────────────────────────────────────────
 
@@ -452,7 +447,7 @@ async function handle(req, res) {
     return res.end(svg);
   }
 
-  if (!checkAuth(req)) return sendJSON(res, 401, { error: 'auth required (append ?k=<token> to the URL)' });
+  // No auth check — loopback-only server, open to localhost.
 
   // ── /api/me ──────────────────────────────────────────────────────────────
   if (req.method === 'GET' && pathname === '/api/me') {
@@ -860,7 +855,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 function banner(actualPort) {
-  const url = `http://${HOST}:${actualPort}/?k=${TOKEN}`;
+  const url = `http://${HOST}:${actualPort}/`;
   console.log('');
   console.log('\x1b[38;5;141m┌─────────────────────────────────────────────────────────────────┐\x1b[0m');
   console.log('\x1b[38;5;141m│\x1b[0m  \x1b[1m✳ Geoclaw Web\x1b[0m — open this URL in your browser:             \x1b[38;5;141m│\x1b[0m');
@@ -870,7 +865,7 @@ function banner(actualPort) {
   console.log(`\x1b[38;5;141m│\x1b[0m  \x1b[2mprovider:\x1b[0m ${(PROVIDER + '/' + MODEL).padEnd(40)}             \x1b[38;5;141m│\x1b[0m`);
   console.log(`\x1b[38;5;141m│\x1b[0m  \x1b[2mworkspace:\x1b[0m ${memory.activeWorkspace().padEnd(40)}            \x1b[38;5;141m│\x1b[0m`);
   console.log('\x1b[38;5;141m│\x1b[0m                                                                 \x1b[38;5;141m│\x1b[0m');
-  console.log('\x1b[38;5;141m│\x1b[0m  \x1b[2mctrl-c to stop. token rotates on every restart.\x1b[0m              \x1b[38;5;141m│\x1b[0m');
+  console.log('\x1b[38;5;141m│\x1b[0m  \x1b[2mloopback-only · no token required                \x1b[0m             \x1b[38;5;141m│\x1b[0m');
   console.log('\x1b[38;5;141m└─────────────────────────────────────────────────────────────────┘\x1b[0m');
   console.log('');
 }

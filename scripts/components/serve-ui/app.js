@@ -2,7 +2,7 @@
 // Reads ?k=<token>, keeps it for all API calls. Switches view panes by data-view.
 // Themes itself from /api/design (DESIGN.md tokens) when present.
 
-const TOKEN = new URLSearchParams(location.search).get('k') || '';
+const TOKEN = ''; // auth removed — server is loopback-only
 
 const q  = (sel, root = document) => root.querySelector(sel);
 const qa = (sel, root = document) => [...root.querySelectorAll(sel)];
