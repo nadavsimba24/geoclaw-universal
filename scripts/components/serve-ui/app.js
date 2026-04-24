@@ -356,7 +356,12 @@ async function handleSlashCommand(text) {
 
   if (cmd === '/clear' || cmd === '/new') {
     chatHistory.length = 0;
-    q('#chat-messages').innerHTML = '';
+    q('#chat-log').innerHTML = '';
+    q('#chat-log').appendChild(el('div', { class: 'chat-empty', id: 'chat-empty' },
+      el('div', { class: 'chat-empty-icon' }, '✳'),
+      el('h2', {}, 'How can I help?'),
+      el('p', {}, 'Ask anything, or type / for commands'),
+    ));
     toast('Chat cleared', 'success');
     return true;
   }
@@ -534,19 +539,19 @@ q('#chat-composer').addEventListener('submit', async (e) => {
   const text = q('#chat-input').value.trim();
   if (!text) return;
 
-  // Guard: no API key → explain instead of silent failure.
-  if (ME && !ME.hasKey) {
-    toast('Set GEOCLAW_MODEL_API_KEY in .env, then restart geoclaw serve.', 'error', 8000);
-    return;
-  }
-
-  // Handle slash commands locally — don't send to LLM
+  // Handle slash commands first — they work even without an API key
   if (text.startsWith('/')) {
     q('#chat-input').value = '';
     q('#chat-input').style.height = 'auto';
     closeSlashMenu();
     const handled = await handleSlashCommand(text);
     if (handled) return;
+  }
+
+  // Guard: no API key → explain instead of silent failure.
+  if (ME && !ME.hasKey) {
+    toast('No API key set. Use /key <your-key> or run geoclaw setup.', 'error', 8000);
+    return;
   }
 
   q('#chat-input').value = '';
