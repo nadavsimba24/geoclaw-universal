@@ -424,6 +424,7 @@ a { color: var(--primary); }
 }
 .chat-composer > form {
   pointer-events: auto;
+  position: relative;
   width: 100%; max-width: 760px;
   display: flex; gap: 8px; align-items: flex-end;
   background: var(--bg-elev);
@@ -1029,16 +1030,17 @@ body {
 /* ── Slash command menu ─────────────────────────────────────────────────── */
 .slash-menu {
   position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0; right: 0;
+  bottom: calc(100% + 8px);
+  left: -1px; right: -1px;
   background: var(--bg-elev-2);
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--primary);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  z-index: 200;
+  z-index: 300;
   max-height: 280px;
   overflow-y: auto;
+  pointer-events: auto;
 }
 .slash-row {
   display: flex;
@@ -1057,7 +1059,6 @@ body {
 .slash-help { line-height: 1.8; font-size: 13px; }
 .slash-help b { color: var(--primary); font-family: var(--font-mono); }
 .slash-help i { color: var(--teal); font-style: normal; }
-.chat-composer { position: relative; }
 
 /* ── Skill Registry browser ────────────────────────────────────────────── */
 .registry-panel {
